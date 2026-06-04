@@ -1,0 +1,36 @@
+{
+  "groq": {
+    "modelo": "llama-3.3-70b-versatile",
+    "temperatura": 0.8,
+    "max_tokens": 4096
+  },
+  "together": {
+    "modelo": "black-forest-labs/FLUX.2-dev",
+    "steps": 20,
+    "aspect_ratio": "16:9"
+  },
+  "tts": {
+    "idioma": "pt-BR",
+    "voz": "pt-BR-Wavenet-B",
+    "velocidade": 1.0,
+    "pitch": 0.0
+  },
+  "assets": {
+    "system_prompt_script": "assets/system_prompt_script.txt",
+    "system_prompt_prompt": "assets/system_prompt_prompt.txt",
+    "style_prompt": "assets/style_prompt.txt"
+  },
+  "pipeline": {
+    "min_chars_por_periodo": 20
+  },
+  "agendamento": {
+    "frequencia": "daily",
+    "horario": "14:00",
+    "fuso_horario": "America/Sao_Paulo"
+  },
+  "youtube": {
+    "categoria_id": "22",
+    "visibilidade": "private",
+    "tags": ["IA", "inteligência artificial", "automação"]
+  }
+}

@@ -1,71 +1,80 @@
-from scripts.generate_image     import gerar_imagem
-from scripts.generate_script    import gerar_roteiro
-from scripts.generate_voice     import gerar_narracao
-from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
-import os
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.cron import CronTrigger
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from pathlib import Path
 
-# V1: Geração de vídeo único quando executado
+from config.settings import get
+from scripts.pipeline import gerar_video
 
-tema = "O celular não é o culpado da sua procrastinação"
-base_out_path = os.path.join(os.getcwd(), 'video_gerado')
+TEMAS = [
+    "dicas de produtividade para estudantes",
+    "como usar inteligência artificial no dia a dia",
+    "hábitos de pessoas bem-sucedidas",
+]
 
-if not os.path.exists(base_out_path):
-    os.makedirs(base_out_path)
-
-roteiro = gerar_roteiro("Gere um roteiro sobre" + tema)
-print("Roteiro gerado! Salvando...")
-frases_roteiro = roteiro[0]
-prompts_imagens = roteiro[1]
-arquivo_roteiro = "roteiro.txt"
-arquivo_prompts = "prompts.txt"
-
-with open(os.path.join(base_out_path, arquivo_roteiro), "a", encoding="utf-8") as arquivo:
-    for frase in frases_roteiro:
-        arquivo.write(f"\n{frase[1]}")
-        
-print("Roteiro salvo em: ", os.path.join(base_out_path, arquivo_roteiro))
-        
-with open(os.path.join(base_out_path, arquivo_prompts), "a", encoding="utf-8") as arquivo:
-    for prompt in prompts_imagens:
-        arquivo.write(f"\n{prompt[1]}")
-        
-print("Prompts salvos em: ", os.path.join(base_out_path, arquivo_prompts))
-
-caminho_narracao = os.path.join(base_out_path, "audio")
-if not os.path.exists(caminho_narracao):
-    os.makedirs(caminho_narracao)
-
-for i, frase in enumerate(frases_roteiro):
-    gerar_narracao(frase[1], os.path.join(caminho_narracao, ("frase_" + str(i+1) + ".mp3")))
-    print(f"Narração {i+1} gerada com sucesso!")
+_tema_index = 0
 
 
-caminho_imagens = os.path.join(base_out_path, "images")
-if not os.path.exists(caminho_imagens):
-    os.makedirs(caminho_imagens)
-    
-for i, prompt in enumerate(prompts_imagens):
-    imagem = gerar_imagem(prompt[1], "16:9", os.path.join("assets", "imagem_referencia.png"))
-    caminho_arquivo = os.path.join(caminho_imagens, f"imagem_{i+1}.png")
-    with open(caminho_arquivo, 'wb') as arquivo:
-        arquivo.write(imagem)
-    print(f"Imagem {i+1} gerada com sucesso!")
+def _proximo_tema() -> str:
+    global _tema_index
+    tema = TEMAS[_tema_index % len(TEMAS)]
+    _tema_index += 1
+    return tema
 
 
-print("Montando o vídeo final...")
-clipes = []
+def _executar() -> None:
+    tema = _proximo_tema()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = Path("output") / timestamp
 
-for i, frase in enumerate(frases_roteiro):
-    caminho_audio = os.path.join(caminho_narracao, f"frase_{i+1}.mp3")
-    caminho_imagem = os.path.join(caminho_imagens, f"imagem_{i+1}.png")
-    
-    audio = AudioFileClip(caminho_audio)
-    clipe = ImageClip(caminho_imagem).with_duration(audio.duration).with_audio(audio)
-    clipes.append(clipe)
-    print(f"Cena {i+1} montada ({audio.duration:.2f}s)")
+    print(f"\n[{datetime.now()}] Iniciando geração do vídeo")
+    print(f"Tema: {tema}")
+    print(f"Saída: {output_path}\n")
 
-video_final = concatenate_videoclips(clipes, method="compose")
-caminho_video = os.path.join(base_out_path, "video_final.mp4")
-video_final.write_videofile(caminho_video, fps=24, codec="libx264", audio_codec="aac")
+    try:
+        caminho = gerar_video(tema=tema, output_path=output_path)
+        print(f"\n[{datetime.now()}] Vídeo concluído: {caminho}")
+    except Exception as e:
+        print(f"\n[{datetime.now()}] Erro na geração do vídeo: {e}")
+        raise
 
-print("Vídeo gerado com sucesso em:", caminho_video)
+
+def _configurar_trigger() -> CronTrigger:
+    frequencia = get("agendamento.frequencia")
+    horario = get("agendamento.horario")
+    fuso = ZoneInfo(get("agendamento.fuso_horario"))
+    hora, minuto = horario.split(":")
+
+    triggers = {
+        "daily":   CronTrigger(hour=hora, minute=minuto, timezone=fuso),
+        "weekly":  CronTrigger(day_of_week="mon", hour=hora, minute=minuto, timezone=fuso),
+        "monthly": CronTrigger(day=1, hour=hora, minute=minuto, timezone=fuso),
+    }
+
+    if frequencia not in triggers:
+        raise ValueError(
+            f"Frequência inválida: '{frequencia}'. "
+            f"Opções válidas: {list(triggers.keys())}"
+        )
+
+    return triggers[frequencia]
+
+
+def main() -> None:
+    frequencia = get("agendamento.frequencia")
+    horario = get("agendamento.horario")
+    fuso = get("agendamento.fuso_horario")
+
+    print("=== YouTube Video Generator ===")
+    print(f"Frequência : {frequencia}")
+    print(f"Horário    : {horario} ({fuso})")
+    print("Aguardando próxima execução...\n")
+
+    scheduler = BlockingScheduler()
+    scheduler.add_job(_executar, trigger=_configurar_trigger())
+    scheduler.start()
+
+
+if __name__ == "__main__":
+    main()
