@@ -31,8 +31,8 @@ Cada etapa é isolada e independente, seguindo o princípio de que modelos de IA
 - [x] Geração do roteiro em linguagem natural
 - [x] Separação do roteiro em períodos narráveis
 - [x] Geração dos prompts de imagem
-- [ ] Geração das imagens com referência de estilo
-- [ ] Geração da narração
+- [x] Geração das imagens com referência de estilo
+- [x] Geração da narração
 - [ ] Edição e montagem do vídeo
 - [ ] Publicação automática
 
