@@ -6,25 +6,10 @@ from pathlib import Path
 
 from config.settings import get
 from scripts.pipeline import gerar_video
-
-TEMAS = [
-    "dicas de produtividade para estudantes",
-    "como usar inteligência artificial no dia a dia",
-    "hábitos de pessoas bem-sucedidas",
-]
-
-_tema_index = 0
-
-
-def _proximo_tema() -> str:
-    global _tema_index
-    tema = TEMAS[_tema_index % len(TEMAS)]
-    _tema_index += 1
-    return tema
-
+from config.temas import proximo_tema
 
 def _executar() -> None:
-    tema = _proximo_tema()
+    tema = proximo_tema()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = Path("output") / timestamp
 
