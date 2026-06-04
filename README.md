@@ -33,7 +33,7 @@ Cada etapa é isolada e independente, seguindo o princípio de que modelos de IA
 - [x] Geração dos prompts de imagem
 - [x] Geração das imagens com referência de estilo
 - [x] Geração da narração
-- [ ] Edição e montagem do vídeo
+- [x] Edição e montagem do vídeo
 - [ ] Publicação automática
 
 **Futuro**
