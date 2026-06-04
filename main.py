@@ -6,7 +6,7 @@ import os
 
 # V1: Geração de vídeo único quando executado
 
-tema = "Como o uso do celular afeta as novas gerações"
+tema = "O celular não é o culpado da sua procrastinação"
 base_out_path = os.path.join(os.getcwd(), 'video_gerado')
 
 if not os.path.exists(base_out_path):
