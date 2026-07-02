@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block titulo %}Novo Tipo de Vídeo{% endblock %}
+{% block conteudo %}
+<h1>Novo Tipo de Vídeo</h1>
+{% if erro %}<div class="aviso erro">{{ erro }}</div>{% endif %}
+<form method="post" action="/tipos/novo">
+  <label>
+    <span class="rotulo">Nome</span>
+    <input type="text" name="nome" required autofocus>
+  </label>
+  <button type="submit">Criar</button>
+</form>
+<p><small>O tipo é criado inativo, com fila de temas e prompts vazios — preencha tudo na página de edição antes de ativá-lo.</small></p>
+{% endblock %}

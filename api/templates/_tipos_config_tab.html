@@ -1,0 +1,95 @@
+{% if sucesso %}
+<div class="aviso sucesso">Configuração salva com sucesso.</div>
+{% endif %}
+{% if erro %}
+<div class="aviso erro">{{ erro }}</div>
+{% endif %}
+<form hx-post="/tipos/{{ tipo.id }}/config" hx-target="#config-tab" hx-swap="innerHTML">
+  <label>
+    <span class="rotulo">Nome</span>
+    <input type="text" name="nome" value="{{ config.nome }}" required>
+  </label>
+  <label>
+    <input type="checkbox" name="ativo" {% if config.ativo %}checked{% endif %}
+           style="width:auto; display:inline-block; margin-right:0.4rem">
+    Ativo (aparece no agendador)
+  </label>
+
+  <fieldset>
+    <legend>Roteiro (Groq)</legend>
+    <label><span class="rotulo">Modelo</span>
+      <input type="text" name="groq_modelo" value="{{ config.groq.modelo }}" required></label>
+    <label><span class="rotulo">Temperatura (0.0–2.0)</span>
+      <input type="number" step="0.1" min="0" max="2" name="groq_temperatura" value="{{ config.groq.temperatura }}" required></label>
+    <label><span class="rotulo">Máx. tokens</span>
+      <input type="number" min="1" max="32768" name="groq_max_tokens" value="{{ config.groq.max_tokens }}" required></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Imagens (Together)</legend>
+    <label><span class="rotulo">Modelo</span>
+      <input type="text" name="together_modelo" value="{{ config.together.modelo }}" required></label>
+    <label><span class="rotulo">Steps (1–50)</span>
+      <input type="number" min="1" max="50" name="together_steps" value="{{ config.together.steps }}" required></label>
+    <label>
+      <span class="rotulo">Proporção</span>
+      <select name="together_aspect_ratio" required>
+        {% for opcao in aspect_ratios %}
+        <option value="{{ opcao }}" {% if config.together.aspect_ratio == opcao %}selected{% endif %}>{{ opcao }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Narração (Google TTS)</legend>
+    <label><span class="rotulo">Idioma (ex: pt-BR)</span>
+      <input type="text" name="tts_idioma" value="{{ config.tts.idioma }}" required></label>
+    <label><span class="rotulo">Voz</span>
+      <input type="text" name="tts_voz" value="{{ config.tts.voz }}" required></label>
+    <label><span class="rotulo">Velocidade (0.25–4.0)</span>
+      <input type="number" step="0.05" min="0.25" max="4.0" name="tts_velocidade" value="{{ config.tts.velocidade }}" required></label>
+    <label><span class="rotulo">Tom / pitch (-20.0–20.0)</span>
+      <input type="number" step="0.5" min="-20" max="20" name="tts_pitch" value="{{ config.tts.pitch }}" required></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Roteirização</legend>
+    <label><span class="rotulo">Mínimo de caracteres por período</span>
+      <input type="number" min="1" name="pipeline_min_chars_por_periodo" value="{{ config.pipeline.min_chars_por_periodo }}" required></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Agendamento</legend>
+    <label>
+      <span class="rotulo">Frequência</span>
+      <select name="agendamento_frequencia" required>
+        {% for opcao in frequencias %}
+        <option value="{{ opcao }}" {% if config.agendamento.frequencia == opcao %}selected{% endif %}>{{ opcao }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label><span class="rotulo">Horário (HH:MM)</span>
+      <input type="time" name="agendamento_horario" value="{{ config.agendamento.horario }}" required></label>
+    <label><span class="rotulo">Fuso horário (ex: America/Sao_Paulo)</span>
+      <input type="text" name="agendamento_fuso_horario" value="{{ config.agendamento.fuso_horario }}" required></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>YouTube</legend>
+    <label><span class="rotulo">Id da categoria</span>
+      <input type="text" name="youtube_categoria_id" value="{{ config.youtube.categoria_id }}" required></label>
+    <label>
+      <span class="rotulo">Visibilidade</span>
+      <select name="youtube_visibilidade" required>
+        {% for opcao in visibilidades %}
+        <option value="{{ opcao }}" {% if config.youtube.visibilidade == opcao %}selected{% endif %}>{{ opcao }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label><span class="rotulo">Tags (separadas por vírgula)</span>
+      <input type="text" name="youtube_tags" value="{{ config.youtube.tags | join(', ') }}"></label>
+  </fieldset>
+
+  <button type="submit">Salvar configuração</button>
+</form>

@@ -1,0 +1,41 @@
+{% if erro %}
+<div class="aviso erro">{{ erro }}</div>
+{% endif %}
+<table>
+  <thead>
+    <tr><th>Nome</th><th>Id</th><th>Status</th><th>Próxima execução</th><th>Ações</th></tr>
+  </thead>
+  <tbody>
+    {% for linha in linhas %}
+    <tr>
+      <td><a href="/tipos/{{ linha.tipo.id }}/editar">{{ linha.tipo.nome }}</a></td>
+      <td><code>{{ linha.tipo.id }}</code></td>
+      <td>
+        <span class="badge {{ 'ativo' if linha.tipo.ativo else 'inativo' }}">
+          {{ 'ativo' if linha.tipo.ativo else 'inativo' }}
+        </span>
+      </td>
+      <td>{{ linha.proxima_execucao or '—' }}</td>
+      <td>
+        <form style="display:inline" hx-post="/tipos/{{ linha.tipo.id }}/toggle-ativo"
+              hx-target="#tipos-lista" hx-swap="innerHTML">
+          <button type="submit" class="secundario">
+            {{ 'Desativar' if linha.tipo.ativo else 'Ativar' }}
+          </button>
+        </form>
+        <form style="display:inline" method="post" action="/tipos/{{ linha.tipo.id }}/duplicar">
+          <input type="hidden" name="novo_nome" value="{{ linha.tipo.nome }} (cópia)">
+          <button type="submit" class="secundario">Duplicar</button>
+        </form>
+        <button class="secundario perigo" hx-delete="/tipos/{{ linha.tipo.id }}"
+                hx-target="#tipos-lista" hx-swap="innerHTML"
+                hx-confirm="Excluir permanentemente o tipo '{{ linha.tipo.nome }}'? Essa ação não pode ser desfeita.">
+          Excluir
+        </button>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">Nenhum tipo de vídeo cadastrado ainda.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

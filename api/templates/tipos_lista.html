@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block titulo %}Tipos de Vídeo{% endblock %}
+{% block conteudo %}
+<h1>Tipos de Vídeo</h1>
+<p><a class="botao" href="/tipos/novo">Novo tipo</a></p>
+<div id="tipos-lista">
+  {% include "_tipos_lista_partial.html" %}
+</div>
+{% endblock %}

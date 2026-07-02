@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from api import scheduler as scheduler_mod
-from api.routers import configuracoes
+from api.routers import configuracoes, tipos
 
 BASE = Path(__file__).parent
 
@@ -23,6 +23,7 @@ app = FastAPI(title="Gerador de Vídeos", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 app.include_router(configuracoes.router)
+app.include_router(tipos.router)
 
 
 @app.get("/")

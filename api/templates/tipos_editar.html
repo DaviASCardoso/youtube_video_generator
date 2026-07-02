@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block titulo %}Editar {{ tipo.nome }}{% endblock %}
+{% block conteudo %}
+<h1>{{ tipo.nome }} <code style="font-size:0.6em">{{ tipo.id }}</code></h1>
+
+<details style="margin-bottom:1rem">
+  <summary>Renomear tipo</summary>
+  <form method="post" action="/tipos/{{ tipo.id }}/renomear">
+    <label>
+      <span class="rotulo">Novo nome</span>
+      <input type="text" name="novo_nome" value="{{ tipo.nome }}" required>
+    </label>
+    <button type="submit" class="secundario">Renomear</button>
+  </form>
+  <p><small>Renomear muda o id/pasta do tipo. Agendamento e histórico são atualizados automaticamente.</small></p>
+</details>
+
+<div x-data="{ aba: 'config' }">
+  <div class="tabs">
+    <button type="button" :class="{ ativa: aba === 'config' }" @click="aba = 'config'">Configuração</button>
+    <button type="button" :class="{ ativa: aba === 'prompts' }" @click="aba = 'prompts'">Prompts</button>
+    <button type="button" :class="{ ativa: aba === 'temas' }" @click="aba = 'temas'">Fila de Temas</button>
+  </div>
+
+  <div x-show="aba === 'config'" id="config-tab">
+    {% include "_tipos_config_tab.html" %}
+  </div>
+  <div x-show="aba === 'prompts'" id="prompts-tab">
+    {% include "_tipos_prompts_tab.html" %}
+  </div>
+  <div x-show="aba === 'temas'" id="temas-tab">
+    {% include "_tipos_temas_tab.html" %}
+  </div>
+</div>
+{% endblock %}
