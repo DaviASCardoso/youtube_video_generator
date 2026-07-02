@@ -64,6 +64,20 @@ def _url_video(execucao: dict) -> str | None:
     return f"/saida/{relativo.as_posix()}"
 
 
+@router.get("/historico", response_class=HTMLResponse)
+def pagina_historico(request: Request, tipo_id: str | None = None):
+    # rota estática registrada antes de "/{execucao_id}" para não ser capturada por ela.
+    return templates.TemplateResponse(
+        "execucoes_historico.html",
+        {
+            "request": request,
+            "registros": historico.listar(tipo_id),
+            "tipos": listar_tipos(),
+            "tipo_id": tipo_id,
+        },
+    )
+
+
 @router.get("/{execucao_id}", response_class=HTMLResponse)
 def pagina_detalhe(execucao_id: str, request: Request):
     try:
