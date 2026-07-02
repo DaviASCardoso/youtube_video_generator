@@ -40,6 +40,18 @@ uvicorn api.app:app
 
 Isso sobe o painel web em `http://127.0.0.1:8000` e, no mesmo processo, o agendador que gera vídeos automaticamente para cada tipo ativo em `tipos/`.
 
+### Acessar de outros dispositivos na mesma rede
+
+Por padrão o painel só aceita conexões da própria máquina. Para liberar o acesso de outros aparelhos na mesma rede Wi-Fi/local:
+
+```
+uvicorn api.app:app --host 0.0.0.0
+```
+
+Depois, descubra o IP local da máquina que está rodando o servidor (`ipconfig` no Windows, procure por "Endereço IPv4" da rede Wi-Fi) e acesse de outro dispositivo por `http://<esse-ip>:8000`. O Windows pode pedir permissão de firewall na primeira vez — permita para redes privadas.
+
+⚠️ O painel não tem autenticação. Qualquer pessoa na mesma rede que souber o endereço poderá editar configurações, disparar gerações (que consomem cota das APIs pagas) e excluir tipos de vídeo.
+
 ## Roadmap
 
 **Em desenvolvimento**
