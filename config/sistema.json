@@ -1,0 +1,13 @@
+{
+  "execucao": {
+    "max_simultaneo": 1
+  },
+  "saida": {
+    "pasta_base": "output"
+  },
+  "video": {
+    "fps": 24,
+    "codec": "libx264",
+    "audio_codec": "aac"
+  }
+}
