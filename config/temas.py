@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import json
 import bisect
+import threading
 
 
 class FilaDeTemas:
@@ -11,6 +12,9 @@ class FilaDeTemas:
 
     def __init__(self, caminho: Path):
         self._caminho = Path(caminho)
+        # Protege leitura-modificação-escrita: um disparo manual e o agendador
+        # podem chamar métodos desta fila ao mesmo tempo para o mesmo tipo.
+        self._lock = threading.Lock()
 
     def _carregar(self) -> list[dict]:
         if not self._caminho.exists():
@@ -55,23 +59,24 @@ class FilaDeTemas:
         if not 0 <= prioridade <= 100:
             raise ValueError(f"Prioridade deve ser entre 0 e 100, recebeu: {prioridade}")
 
-        temas = self._carregar()
+        with self._lock:
+            temas = self._carregar()
 
-        registro = {
-            "tema": tema,
-            "prioridade": prioridade,
-            "fonte": fonte,
-            "adicionado_em": datetime.now(timezone.utc).isoformat(),
-        }
+            registro = {
+                "tema": tema,
+                "prioridade": prioridade,
+                "fonte": fonte,
+                "adicionado_em": datetime.now(timezone.utc).isoformat(),
+            }
 
-        # bisect trabalha com ordem crescente, então usamos prioridade negativa
-        # pra manter o maior no início
-        prioridades = [-t["prioridade"] for t in temas]
-        posicao = bisect.bisect_right(prioridades, -prioridade)
-        temas.insert(posicao, registro)
+            # bisect trabalha com ordem crescente, então usamos prioridade negativa
+            # pra manter o maior no início
+            prioridades = [-t["prioridade"] for t in temas]
+            posicao = bisect.bisect_right(prioridades, -prioridade)
+            temas.insert(posicao, registro)
 
-        self._salvar(temas)
-        return registro
+            self._salvar(temas)
+            return registro
 
     def proximo(self) -> str | None:
         """Remove e retorna o tema de maior prioridade da fila.
@@ -79,14 +84,15 @@ class FilaDeTemas:
         Returns:
             Texto do tema, ou None se a fila estiver vazia.
         """
-        temas = self._carregar()
+        with self._lock:
+            temas = self._carregar()
 
-        if not temas:
-            return None
+            if not temas:
+                return None
 
-        primeiro = temas.pop(0)
-        self._salvar(temas)
-        return primeiro["tema"]
+            primeiro = temas.pop(0)
+            self._salvar(temas)
+            return primeiro["tema"]
 
     def listar(self) -> list[dict]:
         """Retorna todos os temas da fila sem removê-los.
@@ -112,16 +118,17 @@ class FilaDeTemas:
         Raises:
             IndexError: Se o índice estiver fora do range.
         """
-        temas = self._carregar()
+        with self._lock:
+            temas = self._carregar()
 
-        if indice < 0 or indice >= len(temas):
-            raise IndexError(
-                f"Índice {indice} fora do range. A fila tem {len(temas)} temas (0 a {len(temas) - 1})."
-            )
+            if indice < 0 or indice >= len(temas):
+                raise IndexError(
+                    f"Índice {indice} fora do range. A fila tem {len(temas)} temas (0 a {len(temas) - 1})."
+                )
 
-        removido = temas.pop(indice)
-        self._salvar(temas)
-        return removido
+            removido = temas.pop(indice)
+            self._salvar(temas)
+            return removido
 
     def limpar(self) -> int:
         """Remove todos os temas da fila.
@@ -129,10 +136,11 @@ class FilaDeTemas:
         Returns:
             Quantidade de temas removidos.
         """
-        temas = self._carregar()
-        quantidade = len(temas)
-        self._salvar([])
-        return quantidade
+        with self._lock:
+            temas = self._carregar()
+            quantidade = len(temas)
+            self._salvar([])
+            return quantidade
 
     def alterar_prioridade(self, indice: int, nova_prioridade: int) -> dict:
         """Altera a prioridade de um tema e reposiciona na fila.
@@ -151,19 +159,20 @@ class FilaDeTemas:
         if not 0 <= nova_prioridade <= 100:
             raise ValueError(f"Prioridade deve ser entre 0 e 100, recebeu: {nova_prioridade}")
 
-        temas = self._carregar()
+        with self._lock:
+            temas = self._carregar()
 
-        if indice < 0 or indice >= len(temas):
-            raise IndexError(
-                f"Índice {indice} fora do range. A fila tem {len(temas)} temas (0 a {len(temas) - 1})."
-            )
+            if indice < 0 or indice >= len(temas):
+                raise IndexError(
+                    f"Índice {indice} fora do range. A fila tem {len(temas)} temas (0 a {len(temas) - 1})."
+                )
 
-        registro = temas.pop(indice)
-        registro["prioridade"] = nova_prioridade
+            registro = temas.pop(indice)
+            registro["prioridade"] = nova_prioridade
 
-        prioridades = [-t["prioridade"] for t in temas]
-        nova_posicao = bisect.bisect_right(prioridades, -nova_prioridade)
-        temas.insert(nova_posicao, registro)
+            prioridades = [-t["prioridade"] for t in temas]
+            nova_posicao = bisect.bisect_right(prioridades, -nova_prioridade)
+            temas.insert(nova_posicao, registro)
 
-        self._salvar(temas)
-        return registro
+            self._salvar(temas)
+            return registro
