@@ -264,6 +264,11 @@ class _StdoutProxy:
     def desativar(self) -> None:
         self._local.tee = None
 
+    def __getattr__(self, nome):
+        # Encaminha tudo que não é escrita (isatty, fileno, encoding, ...) para o
+        # stdout real — essas são propriedades do terminal, não do destino da escrita.
+        return getattr(self._stdout_real, nome)
+
 
 if not isinstance(sys.stdout, _StdoutProxy):
     sys.stdout = _StdoutProxy(sys.stdout)
