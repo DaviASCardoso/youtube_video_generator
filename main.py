@@ -1,34 +1,39 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
-from config.settings import get
+from config.tipos import TipoVideo, listar_tipos_ativos
 from scripts.pipeline import gerar_video
-from config.temas import proximo_tema
 
-def _executar() -> None:
-    tema = proximo_tema()
+
+def _executar(tipo: TipoVideo) -> None:
+    tema = tipo.temas.proximo()
+    if tema is None:
+        print(f"\n[{datetime.now()}] [{tipo.nome}] Fila de temas vazia, nada a gerar.")
+        return
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = Path("output") / timestamp
+    output_path = Path("output") / tipo.id / timestamp
 
-    print(f"\n[{datetime.now()}] Iniciando geração do vídeo")
+    print(f"\n[{datetime.now()}] [{tipo.nome}] Iniciando geração do vídeo")
     print(f"Tema: {tema}")
     print(f"Saída: {output_path}\n")
 
     try:
-        caminho = gerar_video(tema=tema, output_path=output_path)
-        print(f"\n[{datetime.now()}] Vídeo concluído: {caminho}")
+        caminho = gerar_video(tema=tema, tipo=tipo, output_path=output_path)
+        print(f"\n[{datetime.now()}] [{tipo.nome}] Vídeo concluído: {caminho}")
     except Exception as e:
-        print(f"\n[{datetime.now()}] Erro na geração do vídeo: {e}")
+        print(f"\n[{datetime.now()}] [{tipo.nome}] Erro na geração do vídeo: {e}")
         raise
 
 
-def _configurar_trigger() -> CronTrigger:
-    frequencia = get("agendamento.frequencia")
-    horario = get("agendamento.horario")
-    fuso = ZoneInfo(get("agendamento.fuso_horario"))
+def _configurar_trigger(tipo: TipoVideo) -> CronTrigger:
+    frequencia = tipo.config.get("agendamento.frequencia")
+    horario = tipo.config.get("agendamento.horario")
+    fuso = ZoneInfo(tipo.config.get("agendamento.fuso_horario"))
     hora, minuto = horario.split(":")
 
     triggers = {
@@ -39,7 +44,7 @@ def _configurar_trigger() -> CronTrigger:
 
     if frequencia not in triggers:
         raise ValueError(
-            f"Frequência inválida: '{frequencia}'. "
+            f"Frequência inválida para o tipo '{tipo.id}': '{frequencia}'. "
             f"Opções válidas: {list(triggers.keys())}"
         )
 
@@ -47,17 +52,28 @@ def _configurar_trigger() -> CronTrigger:
 
 
 def main() -> None:
-    frequencia = get("agendamento.frequencia")
-    horario = get("agendamento.horario")
-    fuso = get("agendamento.fuso_horario")
+    tipos = listar_tipos_ativos()
+
+    if not tipos:
+        raise RuntimeError("Nenhum tipo de vídeo ativo encontrado em tipos/.")
 
     print("=== YouTube Video Generator ===")
-    print(f"Frequência : {frequencia}")
-    print(f"Horário    : {horario} ({fuso})")
-    print("Aguardando próxima execução...\n")
+    for tipo in tipos:
+        frequencia = tipo.config.get("agendamento.frequencia")
+        horario = tipo.config.get("agendamento.horario")
+        fuso = tipo.config.get("agendamento.fuso_horario")
+        print(f"Tipo       : {tipo.nome} ({tipo.id})")
+        print(f"Frequência : {frequencia}")
+        print(f"Horário    : {horario} ({fuso})")
+    print("Aguardando próximas execuções...\n")
 
-    scheduler = BlockingScheduler()
-    scheduler.add_job(_executar, trigger=_configurar_trigger())
+    # Executor com um único worker: garante que dois tipos nunca gerem vídeo
+    # ao mesmo tempo, mesmo que seus agendamentos coincidam.
+    scheduler = BlockingScheduler(executors={"default": ThreadPoolExecutor(max_workers=1)})
+
+    for tipo in tipos:
+        scheduler.add_job(_executar, trigger=_configurar_trigger(tipo), args=[tipo], id=tipo.id)
+
     scheduler.start()
 
 
