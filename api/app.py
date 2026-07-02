@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import os
+import socket
 
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
@@ -12,9 +14,32 @@ from config.sistema import sistema
 BASE = Path(__file__).parent
 
 
+def _ips_locais() -> list[str]:
+    """Lista os IPv4 locais da máquina, um por interface de rede ativa (Wi-Fi,
+    Ethernet, etc). A máquina pode estar em mais de uma rede ao mesmo tempo —
+    por isso listamos todos, em vez de adivinhar um só (uma interface Ethernet
+    e uma Wi-Fi, por exemplo, normalmente ficam em sub-redes diferentes e não
+    conseguem se enxergar)."""
+    try:
+        _, _, ips = socket.gethostbyname_ex(socket.gethostname())
+    except OSError:
+        ips = []
+
+    ips = [ip for ip in ips if not ip.startswith("127.")]
+    return ips or ["127.0.0.1"]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scheduler_mod.iniciar()
+
+    porta = os.environ.get("PORT", "8000")
+    print("\nPainel disponível em:")
+    print(f"  Nesta máquina : http://127.0.0.1:{porta}")
+    for ip in _ips_locais():
+        print(f"  Na rede local : http://{ip}:{porta}  (requer --host 0.0.0.0)")
+    print()
+
     yield
     scheduler_mod.parar()
 
