@@ -115,7 +115,9 @@ def criar_tipo(nome: str, config_inicial: dict | None = None) -> TipoVideo:
 
     dados = {**DEFAULT_CONFIG, **(config_inicial or {})}
     dados["nome"] = nome
-    dados["ativo"] = dados.get("ativo", True)
+    # Começa inativo por padrão: um tipo recém-criado ainda tem prompts vazios
+    # e não deve ser pego pelo agendador antes de ser preenchido.
+    dados["ativo"] = dados.get("ativo", False)
 
     Config(pasta / "config.json").salvar(dados)
     (pasta / "temas.json").write_text("[]", encoding="utf-8")
