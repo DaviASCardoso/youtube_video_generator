@@ -58,6 +58,25 @@ class Config:
         """Retorna todas as configurações como dicionário."""
         return self._carregar().copy()
 
+    def salvar(self, dados: dict) -> None:
+        """Substitui e persiste a configuração inteira em disco.
+
+        Args:
+            dados: Novo conteúdo completo do config.json.
+
+        Raises:
+            ValueError: Se dados não for um dicionário.
+        """
+        if not isinstance(dados, dict):
+            raise ValueError("Configuração deve ser um dicionário.")
+
+        self._caminho.parent.mkdir(parents=True, exist_ok=True)
+        self._caminho.write_text(
+            json.dumps(dados, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        self._config = dados
+
     def recarregar(self) -> None:
         """Força o recarregamento do config.json do disco.
         Útil quando o arquivo é editado durante a execução.
