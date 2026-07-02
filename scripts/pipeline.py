@@ -1,16 +1,18 @@
 from pathlib import Path
 from moviepy import AudioFileClip, ImageClip, concatenate_videoclips
 
+from config.tipos import TipoVideo
 from scripts.generate_script import gerar_roteiro
 from scripts.generate_image import gerar_imagem
 from scripts.generate_voice import gerar_narracao
 
 
-def gerar_video(tema: str, output_path: str | Path) -> Path:
+def gerar_video(tema: str, tipo: TipoVideo, output_path: str | Path) -> Path:
     """Executa o pipeline completo de geração de vídeo.
 
     Args:
         tema: Tema do vídeo a ser gerado.
+        tipo: Tipo de vídeo (configuração, prompts e assets) a usar na geração.
         output_path: Pasta onde os arquivos intermediários e o vídeo final serão salvos.
 
     Returns:
@@ -25,7 +27,9 @@ def gerar_video(tema: str, output_path: str | Path) -> Path:
 
     # Etapa 1: roteiro
     print("Gerando roteiro...")
-    frases_roteiro, prompts_imagens = gerar_roteiro(f"Gere um roteiro sobre {tema}")
+    frases_roteiro, prompts_imagens = gerar_roteiro(
+        f"Gere um roteiro sobre {tema}", tipo.config, tipo.assets_dir
+    )
 
     (base / "roteiro.txt").write_text(
         "\n".join(f[1] for f in frases_roteiro), encoding="utf-8"
@@ -40,16 +44,16 @@ def gerar_video(tema: str, output_path: str | Path) -> Path:
     # Etapa 2: narração
     print("\nGerando narrações...")
     for i, (_, frase) in enumerate(frases_roteiro, start=1):
-        gerar_narracao(frase, pasta_audio / f"frase_{i}.mp3")
+        gerar_narracao(frase, pasta_audio / f"frase_{i}.mp3", tipo.config)
         print(f"  Narração {i}/{len(frases_roteiro)} gerada.")
 
     # Etapa 3: imagens
     print("\nGerando imagens...")
-    referencia = Path("assets/imagem_referencia.png")
+    referencia = tipo.assets_dir / "imagem_referencia.png"
     ref_arg = str(referencia) if referencia.exists() else None
 
     for i, (_, prompt) in enumerate(prompts_imagens, start=1):
-        imagem = gerar_imagem(prompt, referencia=ref_arg)
+        imagem = gerar_imagem(prompt, tipo.config, tipo.assets_dir, referencia=ref_arg)
         (pasta_imagens / f"imagem_{i}.png").write_bytes(imagem)
         print(f"  Imagem {i}/{len(prompts_imagens)} gerada.")
 
@@ -76,7 +80,10 @@ def gerar_video(tema: str, output_path: str | Path) -> Path:
 
 
 if __name__ == "__main__":
+    from config.tipos import carregar_tipo
+
     gerar_video(
         tema="dicas de produtividade para estudantes",
+        tipo=carregar_tipo("cetico_pratico"),
         output_path="output/teste",
     )
