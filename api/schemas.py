@@ -1,0 +1,150 @@
+from pydantic import BaseModel, Field, field_validator
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+import re
+
+from config.constantes import FREQUENCIAS, VISIBILIDADES
+from scripts.generate_image import ASPECT_RATIOS
+
+_HORARIO_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_LOCALE_RE = re.compile(r"^[a-z]{2}-[A-Z]{2}$")
+
+
+class SistemaExecucao(BaseModel):
+    max_simultaneo: int = Field(ge=1)
+
+
+class SistemaSaida(BaseModel):
+    pasta_base: str = Field(min_length=1)
+
+
+class SistemaVideo(BaseModel):
+    fps: int = Field(ge=1, le=120)
+    codec: str = Field(min_length=1)
+    audio_codec: str = Field(min_length=1)
+
+
+class SistemaConfig(BaseModel):
+    execucao: SistemaExecucao
+    saida: SistemaSaida
+    video: SistemaVideo
+
+
+class GroqConfig(BaseModel):
+    modelo: str = Field(min_length=1)
+    temperatura: float = Field(ge=0.0, le=2.0)
+    max_tokens: int = Field(ge=1, le=32768)
+
+
+class TogetherConfig(BaseModel):
+    modelo: str = Field(min_length=1)
+    steps: int = Field(ge=1, le=50)
+    aspect_ratio: str
+
+    @field_validator("aspect_ratio")
+    @classmethod
+    def _validar_aspect_ratio(cls, v):
+        if v not in ASPECT_RATIOS:
+            raise ValueError(f"aspect_ratio deve ser um de: {', '.join(ASPECT_RATIOS)}")
+        return v
+
+
+class TtsConfig(BaseModel):
+    idioma: str
+    voz: str = Field(min_length=1)
+    velocidade: float = Field(ge=0.25, le=4.0)
+    pitch: float = Field(ge=-20.0, le=20.0)
+
+    @field_validator("idioma")
+    @classmethod
+    def _validar_idioma(cls, v):
+        if not _LOCALE_RE.match(v):
+            raise ValueError("idioma deve seguir o formato 'xx-YY' (ex: pt-BR)")
+        return v
+
+
+class PipelineConfig(BaseModel):
+    min_chars_por_periodo: int = Field(ge=1)
+
+
+class AgendamentoConfig(BaseModel):
+    frequencia: str
+    horario: str
+    fuso_horario: str
+
+    @field_validator("frequencia")
+    @classmethod
+    def _validar_frequencia(cls, v):
+        if v not in FREQUENCIAS:
+            raise ValueError(f"frequencia deve ser uma de: {', '.join(FREQUENCIAS)}")
+        return v
+
+    @field_validator("horario")
+    @classmethod
+    def _validar_horario(cls, v):
+        if not _HORARIO_RE.match(v):
+            raise ValueError("horario deve seguir o formato HH:MM (24h)")
+        return v
+
+    @field_validator("fuso_horario")
+    @classmethod
+    def _validar_fuso(cls, v):
+        try:
+            ZoneInfo(v)
+        except ZoneInfoNotFoundError:
+            raise ValueError(f"fuso_horario inválido: '{v}'")
+        return v
+
+
+class YoutubeConfig(BaseModel):
+    categoria_id: str = Field(pattern=r"^\d+$")
+    visibilidade: str
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("visibilidade")
+    @classmethod
+    def _validar_visibilidade(cls, v):
+        if v not in VISIBILIDADES:
+            raise ValueError(f"visibilidade deve ser uma de: {', '.join(VISIBILIDADES)}")
+        return v
+
+
+class TipoConfig(BaseModel):
+    nome: str = Field(min_length=1)
+    ativo: bool
+    groq: GroqConfig
+    together: TogetherConfig
+    tts: TtsConfig
+    pipeline: PipelineConfig
+    agendamento: AgendamentoConfig
+    youtube: YoutubeConfig
+
+
+class CriarTipoForm(BaseModel):
+    nome: str = Field(min_length=1)
+
+
+class RenomearTipoForm(BaseModel):
+    novo_nome: str = Field(min_length=1)
+
+
+class DuplicarTipoForm(BaseModel):
+    novo_nome: str = Field(min_length=1)
+
+
+class TemaForm(BaseModel):
+    tema: str = Field(min_length=1)
+    prioridade: int = Field(ge=0, le=100)
+    fonte: str = Field(default="manual", min_length=1)
+
+
+class AlterarPrioridadeForm(BaseModel):
+    nova_prioridade: int = Field(ge=0, le=100)
+
+
+class AssetTextoForm(BaseModel):
+    conteudo: str = Field(min_length=1)
+
+
+class DispararExecucaoForm(BaseModel):
+    tipo_id: str = Field(min_length=1)
+    tema: str | None = None

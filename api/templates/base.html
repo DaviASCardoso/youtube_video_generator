@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block titulo %}Painel do Gerador de Vídeos{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/estilo.css">
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <strong>Gerador de Vídeos</strong>
+    <nav>
+      <a href="/configuracoes">Configurações</a>
+      <a href="/tipos">Tipos de Vídeo</a>
+      <a href="/execucoes">Execuções</a>
+      <a href="/execucoes/historico">Histórico</a>
+    </nav>
+  </header>
+  <main>
+    {% block conteudo %}{% endblock %}
+  </main>
+</body>
+</html>
