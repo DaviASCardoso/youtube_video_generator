@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from api import scheduler as scheduler_mod
-from api.routers import assets, configuracoes, tipos
+from api.routers import assets, configuracoes, temas, tipos
 
 BASE = Path(__file__).parent
 
@@ -25,6 +25,7 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 app.include_router(configuracoes.router)
 app.include_router(tipos.router)
 app.include_router(assets.router)
+app.include_router(temas.router)
 
 
 @app.get("/")

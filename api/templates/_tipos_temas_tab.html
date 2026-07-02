@@ -1,1 +1,63 @@
-<p><em>Em breve: fila de temas.</em></p>
+{% if erro %}
+<div class="aviso erro">{{ erro }}</div>
+{% endif %}
+
+<form hx-post="/tipos/{{ tipo.id }}/temas" hx-target="#temas-tab" hx-swap="innerHTML">
+  <label>
+    <span class="rotulo">Novo tema</span>
+    <input type="text" name="tema" required>
+  </label>
+  <label>
+    <span class="rotulo">Prioridade (0–100, maior = mais cedo)</span>
+    <input type="number" name="prioridade" min="0" max="100" value="50" required>
+  </label>
+  <label>
+    <span class="rotulo">Fonte</span>
+    <input list="fontes-tema" name="fonte" value="manual">
+    <datalist id="fontes-tema">
+      {% for f in fontes %}
+      <option value="{{ f }}">
+      {% endfor %}
+    </datalist>
+  </label>
+  <button type="submit">Adicionar à fila</button>
+</form>
+
+<table style="margin-top:1rem">
+  <thead>
+    <tr><th>#</th><th>Tema</th><th>Prioridade</th><th>Fonte</th><th>Ações</th></tr>
+  </thead>
+  <tbody>
+    {% for t in temas %}
+    <tr>
+      <td>{{ loop.index0 }}</td>
+      <td>{{ t.tema }}</td>
+      <td>
+        <form style="display:flex; gap:0.4rem; align-items:center"
+              hx-post="/tipos/{{ tipo.id }}/temas/{{ loop.index0 }}/prioridade"
+              hx-target="#temas-tab" hx-swap="innerHTML">
+          <input type="number" name="nova_prioridade" min="0" max="100" value="{{ t.prioridade }}"
+                 style="width:5rem">
+          <button type="submit" class="secundario">Atualizar</button>
+        </form>
+      </td>
+      <td>{{ t.fonte }}</td>
+      <td>
+        <button class="secundario perigo" hx-delete="/tipos/{{ tipo.id }}/temas/{{ loop.index0 }}"
+                hx-target="#temas-tab" hx-swap="innerHTML" hx-confirm="Remover este tema da fila?">
+          Remover
+        </button>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">Fila vazia.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if temas %}
+<button class="secundario perigo" style="margin-top:0.75rem" hx-delete="/tipos/{{ tipo.id }}/temas"
+        hx-target="#temas-tab" hx-swap="innerHTML" hx-confirm="Limpar toda a fila de temas? Essa ação não pode ser desfeita.">
+  Limpar fila inteira
+</button>
+{% endif %}
