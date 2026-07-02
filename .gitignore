@@ -2,3 +2,5 @@
 credentials_voice_google.json
 CLAUDE.md
 __pycache__/
+output/
+execucoes/
