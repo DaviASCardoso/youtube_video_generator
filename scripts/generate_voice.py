@@ -1,7 +1,7 @@
 from google.cloud import texttospeech
 from dotenv import load_dotenv
 from pathlib import Path
-from config.settings import get
+from config.settings import Config
 import os
 
 BASE = Path(__file__).parent
@@ -13,7 +13,7 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(
 )
 
 
-def gerar_narracao(texto: str, caminho_saida: str | Path) -> Path:
+def gerar_narracao(texto: str, caminho_saida: str | Path, config: Config) -> Path:
     if not texto.strip():
         raise ValueError("O texto para narração não pode estar vazio.")
 
@@ -22,14 +22,14 @@ def gerar_narracao(texto: str, caminho_saida: str | Path) -> Path:
     entrada = texttospeech.SynthesisInput(text=texto)
 
     voz = texttospeech.VoiceSelectionParams(
-        language_code=get("tts.idioma"),
-        name=get("tts.voz"),
+        language_code=config.get("tts.idioma"),
+        name=config.get("tts.voz"),
     )
 
     config_audio = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=get("tts.velocidade"),
-        pitch=get("tts.pitch"),
+        speaking_rate=config.get("tts.velocidade"),
+        pitch=config.get("tts.pitch"),
     )
 
     resposta = cliente.synthesize_speech(
@@ -46,8 +46,12 @@ def gerar_narracao(texto: str, caminho_saida: str | Path) -> Path:
 
 
 if __name__ == "__main__":
+    from config.tipos import carregar_tipo
+
+    tipo = carregar_tipo("cetico_pratico")
     arquivo = gerar_narracao(
         texto="Você sabia que a maior parte do nosso dia é consumida por atividades que não contribuem para nossos objetivos?",
         caminho_saida="output/narracao_teste.mp3",
+        config=tipo.config,
     )
     print(f"Áudio gerado: {arquivo}")

@@ -1,7 +1,7 @@
 from together import Together
 from dotenv import load_dotenv
 from pathlib import Path
-from config.settings import get
+from config.settings import Config
 import os
 import base64
 
@@ -20,12 +20,13 @@ ASPECT_RATIOS = {
 }
 
 
-def gerar_imagem(prompt: str, referencia: str | None = None) -> bytes:
-    raiz = BASE.parent
-    style_prompt = (raiz / get("assets.style_prompt")).read_text(encoding="utf-8").strip()
+def gerar_imagem(
+    prompt: str, config: Config, assets_dir: Path, referencia: str | None = None
+) -> bytes:
+    style_prompt = (assets_dir / "style_prompt.txt").read_text(encoding="utf-8").strip()
     prompt_final = f"{style_prompt} {prompt}"
 
-    aspect_ratio = get("together.aspect_ratio")
+    aspect_ratio = config.get("together.aspect_ratio")
     if aspect_ratio not in ASPECT_RATIOS:
         raise ValueError(f"Aspect ratio inválido: '{aspect_ratio}'. Opções: {list(ASPECT_RATIOS.keys())}")
 
@@ -34,11 +35,11 @@ def gerar_imagem(prompt: str, referencia: str | None = None) -> bytes:
     cliente = Together(api_key=API_KEY)
 
     kwargs = dict(
-        model=get("together.modelo"),
+        model=config.get("together.modelo"),
         prompt=prompt_final,
         width=width,
         height=height,
-        steps=get("together.steps"),
+        steps=config.get("together.steps"),
         response_format="base64",
     )
 
@@ -56,6 +57,13 @@ def gerar_imagem(prompt: str, referencia: str | None = None) -> bytes:
 
 
 if __name__ == "__main__":
-    imagem = gerar_imagem("A focused young woman studying at a wooden desk, warm lamp light")
+    from config.tipos import carregar_tipo
+
+    tipo = carregar_tipo("cetico_pratico")
+    imagem = gerar_imagem(
+        "A focused young woman studying at a wooden desk, warm lamp light",
+        tipo.config,
+        tipo.assets_dir,
+    )
     Path("output.png").write_bytes(imagem)
     print("Imagem salva em output.png")
