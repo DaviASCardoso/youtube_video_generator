@@ -6,6 +6,8 @@
 
 Pipeline 100% automatizado para geração e publicação periódica de vídeos longos no YouTube. Cada etapa é delegada a um modelo de IA especializado — do roteiro à publicação — sem intervenção humana.
 
+O sistema suporta múltiplos **tipos de vídeo** rodando lado a lado (ex: canais ou personas diferentes), cada um com seu próprio agendamento, prompts, voz, configurações de geração e fila de temas. Cada tipo vive em sua própria pasta dentro de `tipos/`.
+
 ## Pipeline
 
 ```
@@ -34,6 +36,7 @@ Cada etapa é isolada e independente, seguindo o princípio de que modelos de IA
 - [x] Geração das imagens com referência de estilo
 - [x] Geração da narração
 - [x] Edição e montagem do vídeo
+- [x] Suporte a múltiplos tipos de vídeo (agendamento, prompts, voz e fila de temas independentes por tipo)
 - [ ] Publicação automática
 
 **Futuro**
