@@ -2,6 +2,7 @@ from pathlib import Path
 from moviepy import AudioFileClip, ImageClip, concatenate_videoclips
 
 from config.tipos import TipoVideo
+from config.sistema import sistema
 from scripts.generate_script import gerar_roteiro
 from scripts.generate_image import gerar_imagem
 from scripts.generate_voice import gerar_narracao
@@ -73,7 +74,12 @@ def gerar_video(tema: str, tipo: TipoVideo, output_path: str | Path) -> Path:
 
     video_final = concatenate_videoclips(clipes, method="compose")
     caminho_video = base / "video_final.mp4"
-    video_final.write_videofile(str(caminho_video), fps=24, codec="libx264", audio_codec="aac")
+    video_final.write_videofile(
+        str(caminho_video),
+        fps=sistema.get("video.fps"),
+        codec=sistema.get("video.codec"),
+        audio_codec=sistema.get("video.audio_codec"),
+    )
 
     print(f"\nVídeo gerado com sucesso: {caminho_video}")
     return caminho_video

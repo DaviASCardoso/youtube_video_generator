@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from config.tipos import TipoVideo, listar_tipos_ativos
+from config.sistema import sistema
 from scripts.pipeline import gerar_video
 
 
@@ -16,7 +17,7 @@ def _executar(tipo: TipoVideo) -> None:
         return
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = Path("output") / tipo.id / timestamp
+    output_path = Path(sistema.get("saida.pasta_base")) / tipo.id / timestamp
 
     print(f"\n[{datetime.now()}] [{tipo.nome}] Iniciando geração do vídeo")
     print(f"Tema: {tema}")
@@ -57,6 +58,8 @@ def main() -> None:
     if not tipos:
         raise RuntimeError("Nenhum tipo de vídeo ativo encontrado em tipos/.")
 
+    max_simultaneo = sistema.get("execucao.max_simultaneo")
+
     print("=== YouTube Video Generator ===")
     for tipo in tipos:
         frequencia = tipo.config.get("agendamento.frequencia")
@@ -65,11 +68,12 @@ def main() -> None:
         print(f"Tipo       : {tipo.nome} ({tipo.id})")
         print(f"Frequência : {frequencia}")
         print(f"Horário    : {horario} ({fuso})")
+    print(f"Execução   : até {max_simultaneo} vídeo(s) simultâneo(s)")
     print("Aguardando próximas execuções...\n")
 
-    # Executor com um único worker: garante que dois tipos nunca gerem vídeo
-    # ao mesmo tempo, mesmo que seus agendamentos coincidam.
-    scheduler = BlockingScheduler(executors={"default": ThreadPoolExecutor(max_workers=1)})
+    # execucao.max_simultaneo em config/sistema.json controla quantos vídeos
+    # podem ser gerados ao mesmo tempo (1 = sequencial, mesmo entre tipos diferentes).
+    scheduler = BlockingScheduler(executors={"default": ThreadPoolExecutor(max_workers=max_simultaneo)})
 
     for tipo in tipos:
         scheduler.add_job(_executar, trigger=_configurar_trigger(tipo), args=[tipo], id=tipo.id)
