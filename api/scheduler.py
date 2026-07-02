@@ -1,5 +1,4 @@
 from datetime import datetime
-from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -49,13 +48,9 @@ def _job_agendado(tipo_id: str) -> None:
         print(f"[{tipo.nome}] Já existe uma execução em andamento, pulando esta execução agendada.")
 
 
-def _job_manual(tipo_id: str, tema: str | None) -> None:
+def _job_reservado(tipo_id: str, tema: str, execucao: dict) -> None:
     tipo = carregar_tipo(tipo_id)
-    tema_final = tema or tipo.temas.proximo()
-    if tema_final is None:
-        print(f"[{tipo.nome}] Fila de temas vazia e nenhum tema informado, nada a gerar.")
-        return
-    executar_com_captura(tema_final, tipo)
+    executar_com_captura(tema, tipo, execucao=execucao)
 
 
 def registrar_job(tipo: TipoVideo) -> None:
@@ -84,31 +79,42 @@ def reagendar_job(id_antigo: str, tipo: TipoVideo) -> None:
         registrar_job(tipo)
 
 
-def disparar_agora(tipo: TipoVideo, tema: str | None = None) -> str:
-    """Submete uma execução avulsa no MESMO scheduler/executor dos jobs de cron, para que
-    "executar agora" respeite o mesmo teto de concorrência (execucao.max_simultaneo).
+def disparar_agora(tipo: TipoVideo, tema: str | None = None) -> dict:
+    """Reserva e dispara uma execução avulsa no MESMO scheduler/executor dos jobs de
+    cron, para que "executar agora" respeite o mesmo teto de concorrência
+    (execucao.max_simultaneo).
+
+    O tema (se vindo da fila) e o registro de histórico são resolvidos aqui, de forma
+    síncrona, para que o chamador já saiba o id da execução antes do trabalho pesado
+    (gerar o vídeo) começar rodando em segundo plano.
 
     Args:
         tipo: Tipo de vídeo a executar.
         tema: Tema específico, ou None para consumir o próximo da fila.
 
     Returns:
-        Id do job avulso criado no scheduler.
+        O registro de execução recém-criado (contém seu "id").
 
     Raises:
-        ExecucaoEmAndamentoError: Se já existir uma execução em andamento para o tipo
-            (checagem rápida; a garantia real acontece de forma atômica dentro da execução).
+        ValueError: Se nenhum tema foi informado e a fila do tipo está vazia.
+        ExecucaoEmAndamentoError: Se já existir uma execução em andamento para o tipo.
     """
-    if historico.em_execucao(tipo.id):
-        raise ExecucaoEmAndamentoError(
-            f"Já existe uma execução em andamento para o tipo '{tipo.id}'."
+    tema_final = tema or tipo.temas.proximo()
+    if tema_final is None:
+        raise ValueError(
+            f"Fila de temas vazia para o tipo '{tipo.nome}' e nenhum tema foi informado."
         )
 
-    job_id = f"manual-{tipo.id}-{uuid4().hex[:8]}"
+    execucao = historico.iniciar(tipo.id, tipo.nome, tema_final)
+
     scheduler.add_job(
-        _job_manual, trigger="date", run_date=datetime.now(), args=[tipo.id, tema], id=job_id
+        _job_reservado,
+        trigger="date",
+        run_date=datetime.now(),
+        args=[tipo.id, tema_final, execucao],
+        id=f"manual-{execucao['id']}",
     )
-    return job_id
+    return execucao
 
 
 def atualizar_max_simultaneo(max_simultaneo: int) -> None:

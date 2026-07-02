@@ -276,7 +276,7 @@ if not isinstance(sys.stdout, _StdoutProxy):
 _proxy: _StdoutProxy = sys.stdout
 
 
-def executar_com_captura(tema: str, tipo: TipoVideo) -> Path:
+def executar_com_captura(tema: str, tipo: TipoVideo, execucao: dict | None = None) -> Path:
     """Executa o pipeline para um tema/tipo, registrando histórico e log da execução.
 
     Ponto de entrada único usado tanto pelo agendador (cron) quanto por disparos
@@ -286,14 +286,19 @@ def executar_com_captura(tema: str, tipo: TipoVideo) -> Path:
     Args:
         tema: Tema do vídeo a gerar.
         tipo: Tipo de vídeo a usar na geração.
+        execucao: Registro de histórico já criado (via historico.iniciar), para quando
+            o chamador precisa saber o id da execução antes do trabalho pesado começar
+            (ex: disparo manual pela API). Se None, o registro é criado aqui.
 
     Returns:
         Path do vídeo final gerado.
 
     Raises:
-        ExecucaoEmAndamentoError: Se já existir uma execução em andamento para esse tipo.
+        ExecucaoEmAndamentoError: Se já existir uma execução em andamento para esse tipo
+            (apenas quando `execucao` não é informado).
     """
-    execucao = historico.iniciar(tipo.id, tipo.nome, tema)
+    if execucao is None:
+        execucao = historico.iniciar(tipo.id, tipo.nome, tema)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = Path(sistema.get("saida.pasta_base")) / tipo.id / timestamp
     log_path = output_path / "execucao.log"

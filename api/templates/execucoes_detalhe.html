@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titulo %}Execução — {{ execucao.tipo_nome }}{% endblock %}
+{% block conteudo %}
+<h1>{{ execucao.tipo_nome }} <span class="badge {{ execucao.status }}">{{ execucao.status }}</span></h1>
+<p><strong>Tema:</strong> {{ execucao.tema }}</p>
+<p><strong>Iniciado em:</strong> {{ execucao.iniciado_em }}</p>
+{% if execucao.finalizado_em %}<p><strong>Finalizado em:</strong> {{ execucao.finalizado_em }}</p>{% endif %}
+{% if execucao.erro %}<div class="aviso erro">{{ execucao.erro }}</div>{% endif %}
+
+<pre class="log" id="log-area">{{ log_inicial }}</pre>
+
+{% if url_video %}
+<video controls style="max-width:100%; margin-top:1rem">
+  <source src="{{ url_video }}" type="video/mp4">
+</video>
+{% endif %}
+
+{% if execucao.status == 'executando' %}
+<script src="/static/js/log-stream.js"></script>
+<script>iniciarStreamLog("{{ execucao.id }}", "log-area");</script>
+{% endif %}
+{% endblock %}

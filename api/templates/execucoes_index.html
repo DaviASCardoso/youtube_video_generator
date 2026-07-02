@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block titulo %}Executar Pipeline{% endblock %}
+{% block conteudo %}
+<h1>Executar Pipeline</h1>
+{% if erro %}<div class="aviso erro">{{ erro }}</div>{% endif %}
+
+<form method="post" action="/execucoes" x-data="{ modo: 'fila' }">
+  <label>
+    <span class="rotulo">Tipo de vídeo</span>
+    <select name="tipo_id" required>
+      {% for t in tipos %}
+      <option value="{{ t.id }}">{{ t.nome }}{{ ' (inativo)' if not t.ativo else '' }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label style="display:flex; align-items:center; gap:0.4rem">
+    <input type="radio" x-model="modo" value="fila" checked style="width:auto">
+    Próximo tema da fila do tipo
+  </label>
+  <label style="display:flex; align-items:center; gap:0.4rem">
+    <input type="radio" x-model="modo" value="manual" style="width:auto">
+    Tema específico
+  </label>
+
+  <label x-show="modo === 'manual'">
+    <span class="rotulo">Tema</span>
+    <input type="text" name="tema">
+  </label>
+
+  <button type="submit">Executar agora</button>
+</form>
+
+{% if em_andamento %}
+<h2>Em andamento</h2>
+<ul>
+  {% for e in em_andamento %}
+  <li><a href="/execucoes/{{ e.id }}">{{ e.tipo_nome }} — {{ e.tema }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<h2>Recentes</h2>
+<table>
+  <thead><tr><th>Tipo</th><th>Tema</th><th>Status</th><th>Iniciado em</th></tr></thead>
+  <tbody>
+    {% for e in recentes %}
+    <tr>
+      <td>{{ e.tipo_nome }}</td>
+      <td><a href="/execucoes/{{ e.id }}">{{ e.tema }}</a></td>
+      <td><span class="badge {{ e.status }}">{{ e.status }}</span></td>
+      <td>{{ e.iniciado_em }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4">Nenhuma execução ainda.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p><a href="/execucoes/historico">Ver histórico completo →</a></p>
+{% endblock %}
