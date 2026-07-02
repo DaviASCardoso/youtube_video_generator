@@ -16,6 +16,7 @@ from config.tipos import (
 )
 from scripts.execucoes import historico
 from scripts.generate_image import ASPECT_RATIOS
+from api.routers.assets import contexto_prompts
 
 router = APIRouter(prefix="/tipos", tags=["tipos"])
 
@@ -129,6 +130,7 @@ def pagina_editar(id: str, request: Request):
             "aspect_ratios": list(ASPECT_RATIOS),
             "frequencias": FREQUENCIAS,
             "visibilidades": VISIBILIDADES,
+            **contexto_prompts(tipo),
         },
     )
 

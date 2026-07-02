@@ -1,1 +1,53 @@
-<p><em>Em breve: edição de prompts.</em></p>
+{% if sucesso %}
+<div class="aviso sucesso">Salvo com sucesso.</div>
+{% endif %}
+{% if erro %}
+<div class="aviso erro">{{ erro }}</div>
+{% endif %}
+
+<form hx-post="/tipos/{{ tipo.id }}/assets/system_prompt_script.txt" hx-target="#prompts-tab" hx-swap="innerHTML">
+  <label>
+    <span class="rotulo">Prompt do roteiro (persona/estilo da narração)</span>
+    <textarea name="conteudo" rows="14" required>{{ conteudos['system_prompt_script.txt'] }}</textarea>
+  </label>
+  <button type="submit">Salvar</button>
+</form>
+
+<form hx-post="/tipos/{{ tipo.id }}/assets/system_prompt_prompt.txt" hx-target="#prompts-tab" hx-swap="innerHTML">
+  <label>
+    <span class="rotulo">Prompt de geração dos prompts de imagem</span>
+    <textarea name="conteudo" rows="10" required>{{ conteudos['system_prompt_prompt.txt'] }}</textarea>
+  </label>
+  <button type="submit">Salvar</button>
+</form>
+
+<form hx-post="/tipos/{{ tipo.id }}/assets/style_prompt.txt" hx-target="#prompts-tab" hx-swap="innerHTML">
+  <label>
+    <span class="rotulo">Prompt de estilo visual (prefixado em toda imagem)</span>
+    <textarea name="conteudo" rows="6" required>{{ conteudos['style_prompt.txt'] }}</textarea>
+  </label>
+  <button type="submit">Salvar</button>
+</form>
+
+<fieldset>
+  <legend>Imagem de referência (opcional, PNG)</legend>
+  {% if tem_imagem %}
+  <img src="/tipos/{{ tipo.id }}/assets/imagem_referencia?t={{ range(1, 999999) | random }}"
+       alt="Imagem de referência" style="max-width:220px; display:block; margin-bottom:0.75rem; border:1px solid var(--cor-borda); border-radius:4px">
+  <button class="secundario perigo" hx-delete="/tipos/{{ tipo.id }}/assets/imagem_referencia"
+          hx-target="#prompts-tab" hx-swap="innerHTML" hx-confirm="Remover a imagem de referência?">
+    Remover imagem
+  </button>
+  {% else %}
+  <p><small>Nenhuma imagem de referência definida.</small></p>
+  {% endif %}
+
+  <form hx-post="/tipos/{{ tipo.id }}/assets/imagem_referencia" hx-target="#prompts-tab" hx-swap="innerHTML"
+        hx-encoding="multipart/form-data" style="margin-top:0.75rem">
+    <label>
+      <span class="rotulo">Enviar nova imagem (PNG)</span>
+      <input type="file" name="arquivo_imagem" accept="image/png" required>
+    </label>
+    <button type="submit" class="secundario">Enviar</button>
+  </form>
+</fieldset>
