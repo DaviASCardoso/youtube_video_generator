@@ -22,12 +22,16 @@
   },
   "agendamento": {
     "frequencia": "daily",
-    "horario": "14:00",
+    "horario": "02:04",
     "fuso_horario": "America/Sao_Paulo"
   },
   "youtube": {
     "categoria_id": "22",
     "visibilidade": "private",
-    "tags": ["IA", "inteligência artificial", "automação"]
+    "tags": [
+      "IA",
+      "inteligência artificial",
+      "automação"
+    ]
   }
 }
