@@ -9,10 +9,16 @@ from apscheduler.jobstores.base import JobLookupError
 from config.tipos import TipoVideo, listar_tipos_ativos, carregar_tipo
 from config.sistema import sistema
 from scripts.execucoes import executar_com_captura, historico, ExecucaoEmAndamentoError
+from scripts.tendencias import coletar_temas_do_dia
 
 scheduler = BackgroundScheduler(
     executors={"default": ThreadPoolExecutor(max_workers=sistema.get("execucao.max_simultaneo"))}
 )
+
+# Id reservado do job global de tendências (não é um tipo de vídeo). Os demais
+# jobs usam o id do tipo; este prefixo com "__" não colide com um id de tipo
+# (que é um slug de [a-z0-9_] sem "__" no começo).
+_JOB_TENDENCIAS = "__tendencias__"
 
 
 def _configurar_trigger(tipo: TipoVideo) -> CronTrigger:
@@ -117,6 +123,36 @@ def disparar_agora(tipo: TipoVideo, tema: str | None = None) -> dict:
     return execucao
 
 
+def _job_tendencias() -> None:
+    coletar_temas_do_dia()
+
+
+def registrar_job_tendencias() -> None:
+    """Agenda (ou reagenda/remove) o job diário global de tendências, conforme as
+    configurações do sistema (tendencias.ativo/horario/fuso_horario).
+
+    Job único (não por tipo): busca as tendências do dia uma vez e alimenta a fila
+    de cada tipo ativo. Chamado no start e sempre que as configurações mudam.
+    """
+    if not sistema.get("tendencias.ativo"):
+        try:
+            scheduler.remove_job(_JOB_TENDENCIAS)
+        except JobLookupError:
+            pass
+        return
+
+    horario = sistema.get("tendencias.horario")
+    fuso = ZoneInfo(sistema.get("tendencias.fuso_horario"))
+    hora, minuto = horario.split(":")
+
+    scheduler.add_job(
+        _job_tendencias,
+        trigger=CronTrigger(hour=hora, minute=minuto, timezone=fuso),
+        id=_JOB_TENDENCIAS,
+        replace_existing=True,
+    )
+
+
 def atualizar_max_simultaneo(max_simultaneo: int) -> None:
     """Aplica uma mudança de execucao.max_simultaneo ao pool de execução em tempo real,
     sem precisar reiniciar o processo."""
@@ -127,6 +163,7 @@ def atualizar_max_simultaneo(max_simultaneo: int) -> None:
 def iniciar() -> None:
     for tipo in listar_tipos_ativos():
         registrar_job(tipo)
+    registrar_job_tendencias()
     scheduler.start()
 
 
