@@ -26,7 +26,7 @@
   </fieldset>
 
   <fieldset>
-    <legend>Imagens (Together)</legend>
+    <legend>Imagens por IA (Together — usado só no modo "ia")</legend>
     <label><span class="rotulo">Modelo</span>
       <input type="text" name="together_modelo" value="{{ config.together.modelo }}" required></label>
     <label><span class="rotulo">Steps (1–50)</span>
@@ -39,6 +39,44 @@
         {% endfor %}
       </select>
     </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Cenas do vídeo</legend>
+    <label>
+      <span class="rotulo">Modo de geração</span>
+      <select name="imagens_modo" required>
+        {% for opcao in modos_imagem %}
+        <option value="{{ opcao }}" {% if config.imagens.modo == opcao %}selected{% endif %}>
+          {% if opcao == 'ia' %}ia — imagens geradas por IA (Together){% else %}personagem — foto do Pexels + PNG do personagem{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label><span class="rotulo">Largura do vídeo (px)</span>
+      <input type="number" min="480" max="3840" name="imagens_largura" value="{{ config.imagens.largura }}" required></label>
+    <label><span class="rotulo">Altura do vídeo (px)</span>
+      <input type="number" min="480" max="3840" name="imagens_altura" value="{{ config.imagens.altura }}" required></label>
+
+    <fieldset>
+      <legend>Personagem (modo "personagem")</legend>
+      <p><small>Os PNGs do personagem (um por emoção) ficam na aba Prompts. O canto inferior esquerdo
+      é o único que a interface do YouTube Shorts deixa livre (direita = botões, baixo = título).</small></p>
+      <label>
+        <span class="rotulo">Posição na tela</span>
+        <select name="personagem_posicao" required>
+          {% for opcao in posicoes %}
+          <option value="{{ opcao }}" {% if config.imagens.personagem.posicao == opcao %}selected{% endif %}>{{ opcao.replace('_', ' ') }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label><span class="rotulo">Altura do personagem (% da tela, 10–100)</span>
+        <input type="number" min="10" max="100" name="personagem_altura_percentual" value="{{ config.imagens.personagem.altura_percentual }}" required></label>
+      <label><span class="rotulo">Margem lateral (px, distância da borda esquerda/direita)</span>
+        <input type="number" min="0" max="1000" name="personagem_margem_lateral" value="{{ config.imagens.personagem.margem_lateral }}" required></label>
+      <label><span class="rotulo">Margem vertical (px, distância da borda de cima/baixo — deixe ~380 embaixo para o título do Shorts)</span>
+        <input type="number" min="0" max="1000" name="personagem_margem_vertical" value="{{ config.imagens.personagem.margem_vertical }}" required></label>
+    </fieldset>
   </fieldset>
 
   <fieldset>

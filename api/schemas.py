@@ -2,7 +2,8 @@ from pydantic import BaseModel, Field, field_validator
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import re
 
-from config.constantes import FREQUENCIAS, VISIBILIDADES
+from config.constantes import FREQUENCIAS, MODOS_IMAGEM, VISIBILIDADES
+from scripts.compositor import POSICOES
 from scripts.generate_image import ASPECT_RATIOS
 
 _HORARIO_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -45,6 +46,34 @@ class TogetherConfig(BaseModel):
     def _validar_aspect_ratio(cls, v):
         if v not in ASPECT_RATIOS:
             raise ValueError(f"aspect_ratio deve ser um de: {', '.join(ASPECT_RATIOS)}")
+        return v
+
+
+class PersonagemConfig(BaseModel):
+    posicao: str
+    altura_percentual: int = Field(ge=10, le=100)
+    margem_lateral: int = Field(ge=0, le=1000)
+    margem_vertical: int = Field(ge=0, le=1000)
+
+    @field_validator("posicao")
+    @classmethod
+    def _validar_posicao(cls, v):
+        if v not in POSICOES:
+            raise ValueError(f"posicao deve ser uma de: {', '.join(POSICOES)}")
+        return v
+
+
+class ImagensConfig(BaseModel):
+    modo: str
+    largura: int = Field(ge=480, le=3840)
+    altura: int = Field(ge=480, le=3840)
+    personagem: PersonagemConfig
+
+    @field_validator("modo")
+    @classmethod
+    def _validar_modo(cls, v):
+        if v not in MODOS_IMAGEM:
+            raise ValueError(f"modo deve ser um de: {', '.join(MODOS_IMAGEM)}")
         return v
 
 
@@ -113,6 +142,7 @@ class TipoConfig(BaseModel):
     ativo: bool
     groq: GroqConfig
     together: TogetherConfig
+    imagens: ImagensConfig
     tts: TtsConfig
     pipeline: PipelineConfig
     agendamento: AgendamentoConfig

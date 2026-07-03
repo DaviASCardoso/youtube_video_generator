@@ -5,8 +5,9 @@ from pydantic import ValidationError
 from api.schemas import TipoConfig
 from api.templating import templates
 from api import scheduler as scheduler_mod
-from config.constantes import FREQUENCIAS, VISIBILIDADES
+from config.constantes import FREQUENCIAS, MODOS_IMAGEM, VISIBILIDADES
 from config.tipos import (
+    DEFAULT_CONFIG,
     carregar_tipo,
     listar_tipos,
     criar_tipo,
@@ -14,6 +15,7 @@ from config.tipos import (
     renomear_tipo,
     excluir_tipo,
 )
+from scripts.compositor import POSICOES
 from scripts.execucoes import historico
 from scripts.generate_image import ASPECT_RATIOS
 from api.routers.assets import contexto_prompts
@@ -120,17 +122,22 @@ def excluir(id: str, request: Request):
 @router.get("/{id}/editar", response_class=HTMLResponse)
 def pagina_editar(id: str, request: Request):
     tipo = carregar_tipo(id)
+    # merge raso com os padrões: tipos criados antes da seção "imagens" existir
+    # ainda renderizam o formulário (o primeiro salvar persiste a seção).
+    config = {**DEFAULT_CONFIG, **tipo.config.get_all()}
     return templates.TemplateResponse(
         "tipos_editar.html",
         {
             "request": request,
             "tipo": tipo,
-            "config": tipo.config.get_all(),
+            "config": config,
             "erro": None,
             "sucesso": False,
             "aspect_ratios": list(ASPECT_RATIOS),
             "frequencias": FREQUENCIAS,
             "visibilidades": VISIBILIDADES,
+            "modos_imagem": MODOS_IMAGEM,
+            "posicoes": POSICOES,
             **contexto_prompts(tipo),
             **contexto_temas(tipo),
         },
@@ -149,6 +156,13 @@ def salvar_config(
     together_modelo: str = Form(...),
     together_steps: int = Form(...),
     together_aspect_ratio: str = Form(...),
+    imagens_modo: str = Form(...),
+    imagens_largura: int = Form(...),
+    imagens_altura: int = Form(...),
+    personagem_posicao: str = Form(...),
+    personagem_altura_percentual: int = Form(...),
+    personagem_margem_lateral: int = Form(...),
+    personagem_margem_vertical: int = Form(...),
     tts_idioma: str = Form(...),
     tts_voz: str = Form(...),
     tts_velocidade: float = Form(...),
@@ -173,6 +187,17 @@ def salvar_config(
             "modelo": together_modelo,
             "steps": together_steps,
             "aspect_ratio": together_aspect_ratio,
+        },
+        "imagens": {
+            "modo": imagens_modo,
+            "largura": imagens_largura,
+            "altura": imagens_altura,
+            "personagem": {
+                "posicao": personagem_posicao,
+                "altura_percentual": personagem_altura_percentual,
+                "margem_lateral": personagem_margem_lateral,
+                "margem_vertical": personagem_margem_vertical,
+            },
         },
         "tts": {
             "idioma": tts_idioma,
@@ -200,6 +225,8 @@ def salvar_config(
         "aspect_ratios": list(ASPECT_RATIOS),
         "frequencias": FREQUENCIAS,
         "visibilidades": VISIBILIDADES,
+        "modos_imagem": MODOS_IMAGEM,
+        "posicoes": POSICOES,
     }
 
     try:
