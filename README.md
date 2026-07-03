@@ -68,7 +68,17 @@ uvicorn api.app:app --host 0.0.0.0
 
 Depois, descubra o IP local da máquina que está rodando o servidor (`ipconfig` no Windows, procure por "Endereço IPv4" da rede Wi-Fi) e acesse de outro dispositivo por `http://<esse-ip>:8000`. O Windows pode pedir permissão de firewall na primeira vez — permita para redes privadas.
 
-⚠️ O painel não tem autenticação. Qualquer pessoa na mesma rede que souber o endereço poderá editar configurações, disparar gerações (que consomem cota das APIs pagas) e excluir tipos de vídeo.
+### Login (opcional, recomendado)
+
+Por padrão o painel não exige login. Para fechar o acesso na rede local, defina `ADMIN_USER` e `ADMIN_PASSWORD` no `.env` — com as duas presentes, todo o painel passa a exigir login. Defina também `SESSION_SECRET` (uma string aleatória qualquer) para que a sessão continue válida entre reinícios; sem ela, um segredo novo é gerado a cada inicialização e você é deslogado ao reiniciar.
+
+```
+ADMIN_USER=seu_usuario
+ADMIN_PASSWORD=sua_senha
+SESSION_SECRET=uma_string_longa_e_aleatoria
+```
+
+⚠️ O login roda sobre HTTP (sem HTTPS na rede local): ele mantém curiosos e outros dispositivos da rede de fora, mas a senha trafega sem criptografia — não é proteção contra alguém que consiga farejar o tráfego da rede. Sem `ADMIN_USER`/`ADMIN_PASSWORD`, o painel fica aberto: qualquer pessoa na mesma rede pode editar configurações, disparar gerações (que consomem cota das APIs pagas) e excluir tipos de vídeo.
 
 ## Testes
 
