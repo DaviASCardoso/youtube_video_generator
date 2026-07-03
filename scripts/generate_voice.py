@@ -13,6 +13,13 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(
 )
 
 
+def _suporta_pitch(voz: str) -> bool:
+    """As vozes Chirp/Chirp3-HD não aceitam o parâmetro pitch — a API rejeita a
+    chamada. Para elas, o pitch do config é ignorado (a emoção vem do timbre da
+    própria voz), em vez de derrubar a execução."""
+    return "chirp" not in voz.lower()
+
+
 def gerar_narracao(texto: str, caminho_saida: str | Path, config: Config) -> Path:
     if not texto.strip():
         raise ValueError("O texto para narração não pode estar vazio.")
@@ -21,16 +28,20 @@ def gerar_narracao(texto: str, caminho_saida: str | Path, config: Config) -> Pat
 
     entrada = texttospeech.SynthesisInput(text=texto)
 
+    nome_voz = config.get("tts.voz")
     voz = texttospeech.VoiceSelectionParams(
         language_code=config.get("tts.idioma"),
-        name=config.get("tts.voz"),
+        name=nome_voz,
     )
 
-    config_audio = texttospeech.AudioConfig(
+    parametros_audio = dict(
         audio_encoding=texttospeech.AudioEncoding.MP3,
         speaking_rate=config.get("tts.velocidade"),
-        pitch=config.get("tts.pitch"),
     )
+    if _suporta_pitch(nome_voz):
+        parametros_audio["pitch"] = config.get("tts.pitch")
+
+    config_audio = texttospeech.AudioConfig(**parametros_audio)
 
     resposta = cliente.synthesize_speech(
         input=entrada,
