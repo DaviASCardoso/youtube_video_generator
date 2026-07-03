@@ -26,7 +26,13 @@ DEFAULT_CONFIG = {
     "tts": {"idioma": "pt-BR", "voz": "pt-BR-Wavenet-B", "velocidade": 1.0, "pitch": 0.0},
     "pipeline": {"min_chars_por_periodo": 20},
     "agendamento": {"frequencia": "daily", "horario": "14:00", "fuso_horario": "America/Sao_Paulo"},
-    "youtube": {"categoria_id": "22", "visibilidade": "private", "tags": []},
+    "youtube": {
+        "categoria_id": "22",
+        "visibilidade": "private",
+        "tags": [],
+        "publicar": False,
+        "descricao_base": "",
+    },
 }
 
 ASSETS_PADRAO = (

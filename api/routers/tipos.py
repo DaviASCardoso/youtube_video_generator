@@ -174,6 +174,8 @@ def salvar_config(
     youtube_categoria_id: str = Form(...),
     youtube_visibilidade: str = Form(...),
     youtube_tags: str = Form(""),
+    youtube_publicar: str | None = Form(None),
+    youtube_descricao_base: str = Form(""),
 ):
     dados = {
         "nome": nome.strip(),
@@ -215,6 +217,8 @@ def salvar_config(
             "categoria_id": youtube_categoria_id,
             "visibilidade": youtube_visibilidade,
             "tags": [t.strip() for t in youtube_tags.split(",") if t.strip()],
+            "publicar": youtube_publicar is not None,
+            "descricao_base": youtube_descricao_base.strip(),
         },
     }
 

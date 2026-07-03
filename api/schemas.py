@@ -162,6 +162,8 @@ class YoutubeConfig(BaseModel):
     categoria_id: str = Field(pattern=r"^\d+$")
     visibilidade: str
     tags: list[str] = Field(default_factory=list)
+    publicar: bool = False
+    descricao_base: str = ""
 
     @field_validator("visibilidade")
     @classmethod

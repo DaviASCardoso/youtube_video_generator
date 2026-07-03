@@ -127,6 +127,17 @@
     </label>
     <label><span class="rotulo">Tags (separadas por vírgula)</span>
       <input type="text" name="youtube_tags" value="{{ config.youtube.tags | join(', ') }}"></label>
+    <label><span class="rotulo">Descrição base (entra na descrição do vídeo, depois do roteiro)</span>
+      <textarea name="youtube_descricao_base" rows="3">{{ config.youtube.descricao_base }}</textarea></label>
+    <label>
+      <input type="checkbox" name="youtube_publicar" {% if config.youtube.publicar %}checked{% endif %}
+             style="width:auto; display:inline-block; margin-right:0.4rem">
+      Publicar automaticamente no YouTube após gerar
+    </label>
+    <p><small>⚠️ Deixe desligado até ter certeza. Comece com a visibilidade em
+    <strong>private</strong> — assim o vídeo sobe, mas só você vê, e você promove a público
+    manualmente no YouTube Studio. Exige o consentimento OAuth já feito
+    (<code>python -m scripts.youtube auth --tipo {{ tipo.id }}</code>).</small></p>
   </fieldset>
 
   <button type="submit">Salvar configuração</button>

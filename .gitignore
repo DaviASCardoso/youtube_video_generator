@@ -6,3 +6,6 @@ output/
 execucoes/
 tendencias/
 prototipo_personagem/saida/
+client_secret_youtube.json
+tipos/*/youtube_client_secret.json
+tipos/*/youtube_token.json
