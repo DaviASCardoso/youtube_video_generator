@@ -1,10 +1,23 @@
 import pytest
 
+from scripts import execucoes
 from scripts.execucoes import (
     ExecucaoEmAndamentoError,
     HistoricoExecucoes,
     _TransmissorLog,
 )
+
+
+def _youtube_cfg(publicar):
+    return {
+        "youtube": {
+            "categoria_id": "22",
+            "visibilidade": "private",
+            "tags": [],
+            "descricao_base": "",
+            "publicar": publicar,
+        }
+    }
 
 
 @pytest.fixture
@@ -19,7 +32,14 @@ def test_iniciar_cria_registro(hist):
     assert reg["tema"] == "um tema"
     assert reg["status"] == "executando"
     assert reg["finalizado_em"] is None
+    assert reg["url_publicacao"] is None
     assert "id" in reg
+
+
+def test_registrar_publicacao(hist):
+    reg = hist.iniciar("canal", "Canal X", "t")
+    hist.registrar_publicacao(reg["id"], "https://youtu.be/ABC")
+    assert hist.obter(reg["id"])["url_publicacao"] == "https://youtu.be/ABC"
 
 
 def test_em_execucao(hist):
@@ -101,3 +121,95 @@ def test_transmissor_desassinar_para_de_receber():
     t.desassinar("ex1", fila)
     t.registrar_linha("ex1", "linha")
     assert fila.empty()
+
+
+# --- _publicar_se_configurado (hook de publicação) ---
+
+def test_publicar_desligado_nao_chama_youtube(make_tipo, monkeypatch, tmp_path):
+    tipo = make_tipo(config_extra=_youtube_cfg(publicar=False))
+    import scripts.youtube as y
+
+    chamou = []
+    monkeypatch.setattr(y, "publicar_video", lambda *a, **k: chamou.append(1))
+    execucoes._publicar_se_configurado("id", "tema", tipo, tmp_path / "video_final.mp4")
+    assert chamou == []
+
+
+def test_publicar_ligado_publica_e_registra_url(make_tipo, monkeypatch, tmp_path):
+    tipo = make_tipo(config_extra=_youtube_cfg(publicar=True))
+    hist = HistoricoExecucoes(tmp_path / "h.json")
+    monkeypatch.setattr(execucoes, "historico", hist)
+    reg = hist.iniciar(tipo.id, tipo.nome, "tema")
+
+    video = tmp_path / "out" / "video_final.mp4"
+    video.parent.mkdir()
+    video.write_bytes(b"x")
+    (video.parent / "roteiro.txt").write_text("meu roteiro", encoding="utf-8")
+
+    import scripts.youtube as y
+
+    capturado = {}
+
+    def fake_publicar(vp, tema, tp, roteiro):
+        capturado["roteiro"] = roteiro
+        return "https://youtu.be/AAA"
+
+    monkeypatch.setattr(y, "publicar_video", fake_publicar)
+
+    execucoes._publicar_se_configurado(reg["id"], "tema", tipo, video)
+    assert hist.obter(reg["id"])["url_publicacao"] == "https://youtu.be/AAA"
+    assert capturado["roteiro"] == "meu roteiro"  # roteiro.txt entra na descrição
+
+
+def test_publicar_falha_nao_derruba_execucao(make_tipo, monkeypatch, tmp_path):
+    tipo = make_tipo(config_extra=_youtube_cfg(publicar=True))
+    hist = HistoricoExecucoes(tmp_path / "h.json")
+    monkeypatch.setattr(execucoes, "historico", hist)
+    reg = hist.iniciar(tipo.id, tipo.nome, "tema")
+
+    video = tmp_path / "video_final.mp4"
+    video.write_bytes(b"x")
+
+    import scripts.youtube as y
+
+    def boom(*a, **k):
+        raise RuntimeError("sem token")
+
+    monkeypatch.setattr(y, "publicar_video", boom)
+
+    # não deve levantar; a URL fica None (publicação falhou, vídeo ok)
+    execucoes._publicar_se_configurado(reg["id"], "tema", tipo, video)
+    assert hist.obter(reg["id"])["url_publicacao"] is None
+
+
+def test_executar_com_captura_gera_publica_e_conclui(
+    make_tipo, monkeypatch, tmp_path, sistema_temp
+):
+    """Fluxo completo: gerar_video (mockado) -> publicar (mockado) -> concluir."""
+    sistema_temp._config["saida"]["pasta_base"] = str(tmp_path / "out")
+    tipo = make_tipo(config_extra=_youtube_cfg(publicar=True))
+    hist = HistoricoExecucoes(tmp_path / "h.json")
+    monkeypatch.setattr(execucoes, "historico", hist)
+
+    def fake_gerar(tema, tipo, output_path):
+        from pathlib import Path
+
+        base = Path(output_path)
+        base.mkdir(parents=True, exist_ok=True)
+        (base / "roteiro.txt").write_text("roteiro", encoding="utf-8")
+        video = base / "video_final.mp4"
+        video.write_bytes(b"x")
+        return video
+
+    monkeypatch.setattr(execucoes, "gerar_video", fake_gerar)
+
+    import scripts.youtube as y
+
+    monkeypatch.setattr(y, "publicar_video", lambda *a, **k: "https://youtu.be/ZZZ")
+
+    caminho = execucoes.executar_com_captura("meu tema", tipo)
+    assert caminho.name == "video_final.mp4"
+
+    reg = hist.listar(tipo.id)[0]
+    assert reg["status"] == "concluido"
+    assert reg["url_publicacao"] == "https://youtu.be/ZZZ"

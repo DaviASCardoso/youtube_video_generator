@@ -5,6 +5,7 @@
 <p><strong>Tema:</strong> {{ execucao.tema }}</p>
 <p><strong>Iniciado em:</strong> {{ execucao.iniciado_em }}</p>
 {% if execucao.finalizado_em %}<p><strong>Finalizado em:</strong> {{ execucao.finalizado_em }}</p>{% endif %}
+{% if execucao.url_publicacao %}<p><strong>YouTube:</strong> <a href="{{ execucao.url_publicacao }}" target="_blank" rel="noopener">{{ execucao.url_publicacao }}</a></p>{% endif %}
 {% if execucao.erro %}<div class="aviso erro">{{ execucao.erro }}</div>{% endif %}
 
 <pre class="log" id="log-area">{{ log_inicial }}</pre>

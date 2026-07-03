@@ -90,6 +90,7 @@ class HistoricoExecucoes:
                 "finalizado_em": None,
                 "output_path": None,
                 "log_path": None,
+                "url_publicacao": None,
                 "erro": None,
             }
             execucoes.insert(0, registro)
@@ -108,6 +109,9 @@ class HistoricoExecucoes:
 
     def definir_log_path(self, execucao_id: str, log_path: Path) -> dict:
         return self._atualizar(execucao_id, log_path=str(log_path))
+
+    def registrar_publicacao(self, execucao_id: str, url: str) -> dict:
+        return self._atualizar(execucao_id, url_publicacao=str(url))
 
     def concluir(self, execucao_id: str, output_path: Path) -> dict:
         return self._atualizar(
@@ -276,6 +280,33 @@ if not isinstance(sys.stdout, _StdoutProxy):
 _proxy: _StdoutProxy = sys.stdout
 
 
+def _publicar_se_configurado(execucao_id: str, tema: str, tipo: TipoVideo, caminho_video: Path) -> None:
+    """Publica o vídeo no YouTube se o tipo tiver youtube.publicar ligado.
+
+    Roda dentro da captura de log (aparece no log ao vivo). Uma falha de
+    publicação é registrada mas NÃO derruba a execução — o vídeo já foi gerado
+    e continua no disco para publicar manualmente depois.
+    """
+    try:
+        publicar = tipo.config.get("youtube.publicar")
+    except KeyError:
+        return  # tipos antigos, sem o campo
+    if not publicar:
+        return
+
+    # import tardio: só puxa as libs do Google quando realmente vai publicar
+    from scripts import youtube
+
+    try:
+        roteiro_path = Path(caminho_video).parent / "roteiro.txt"
+        roteiro = roteiro_path.read_text(encoding="utf-8") if roteiro_path.exists() else ""
+        print("\nPublicando no YouTube...")
+        url = youtube.publicar_video(caminho_video, tema, tipo, roteiro)
+        historico.registrar_publicacao(execucao_id, url)
+    except Exception as e:
+        print(f"AVISO: publicação no YouTube falhou (o vídeo foi gerado normalmente): {e}")
+
+
 def executar_com_captura(tema: str, tipo: TipoVideo, execucao: dict | None = None) -> Path:
     """Executa o pipeline para um tema/tipo, registrando histórico e log da execução.
 
@@ -308,6 +339,7 @@ def executar_com_captura(tema: str, tipo: TipoVideo, execucao: dict | None = Non
     _proxy.ativar(tee)
     try:
         caminho = gerar_video(tema=tema, tipo=tipo, output_path=output_path)
+        _publicar_se_configurado(execucao["id"], tema, tipo, caminho)
         historico.concluir(execucao["id"], caminho)
         return caminho
     except Exception as e:

@@ -17,7 +17,7 @@
 
 <table>
   <thead>
-    <tr><th>Tipo</th><th>Tema</th><th>Status</th><th>Iniciado em</th><th>Finalizado em</th></tr>
+    <tr><th>Tipo</th><th>Tema</th><th>Status</th><th>Iniciado em</th><th>Finalizado em</th><th>YouTube</th></tr>
   </thead>
   <tbody>
     {% for e in registros %}
@@ -27,9 +27,10 @@
       <td><span class="badge {{ e.status }}">{{ e.status }}</span></td>
       <td>{{ e.iniciado_em }}</td>
       <td>{{ e.finalizado_em or '—' }}</td>
+      <td>{% if e.url_publicacao %}<a href="{{ e.url_publicacao }}" target="_blank" rel="noopener">ver</a>{% else %}—{% endif %}</td>
     </tr>
     {% else %}
-    <tr><td colspan="5">Nenhuma execução encontrada.</td></tr>
+    <tr><td colspan="6">Nenhuma execução encontrada.</td></tr>
     {% endfor %}
   </tbody>
 </table>
