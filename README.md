@@ -70,6 +70,17 @@ Depois, descubra o IP local da máquina que está rodando o servidor (`ipconfig`
 
 ⚠️ O painel não tem autenticação. Qualquer pessoa na mesma rede que souber o endereço poderá editar configurações, disparar gerações (que consomem cota das APIs pagas) e excluir tipos de vídeo.
 
+## Testes
+
+A pasta `tests/` tem uma suíte de testes unitários (pytest) para toda a lógica fora da camada web — as camadas de configuração (`config/`) e os estágios/fontes do pipeline (`scripts/`). Todas as chamadas de API externas (Groq, Together, Google TTS, Pexels, Trends MCP, Gemini) são mockadas, então a suíte roda offline, rápida e sem gastar cota. Nenhum teste toca nas pastas reais (`tipos/`, `execucoes/`, `tendencias/`) nem no `config/sistema.json`.
+
+```
+pip install -r requirements-dev.txt
+pytest
+```
+
+Convenção: cada nova função fora da parte web ganha um teste correspondente em `tests/`.
+
 ## Roadmap
 
 **Em desenvolvimento**
