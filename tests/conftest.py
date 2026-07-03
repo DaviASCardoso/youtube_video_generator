@@ -99,7 +99,13 @@ _CONFIG_TIPO_PADRAO = {
     "tts": {"idioma": "pt-BR", "voz": "v", "velocidade": 1.0, "pitch": 0.0},
     "pipeline": {"min_chars_por_periodo": 20},
     "agendamento": {"frequencia": "daily", "horario": "06:00", "fuso_horario": "America/Sao_Paulo"},
-    "youtube": {"categoria_id": "22", "visibilidade": "private", "tags": []},
+    "youtube": {
+        "categoria_id": "22",
+        "visibilidade": "private",
+        "tags": [],
+        "publicar": False,
+        "descricao_base": "",
+    },
 }
 
 
