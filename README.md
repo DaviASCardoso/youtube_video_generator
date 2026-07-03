@@ -1,4 +1,4 @@
-# 🎬 Gerador Automático de Vídeos para YouTube
+﻿# 🎬 Gerador Automático de Vídeos para YouTube
 
 > **Status:** Em desenvolvimento ativo
 
@@ -13,11 +13,16 @@ Um **painel web** (`uvicorn api.app:app`) permite controlar tudo isso sem editar
 ## Pipeline
 
 ```
-Roteiro  →  Prompts de Imagem  →  Imagens  →  Narração  →  Edição  →  Publicação
- Groq           Groq             Together     Google TTS   (local)    YouTube API
+Roteiro  →  Cenas  →  Narração  →  Edição  →  Publicação
+ Groq       (modo)    Google TTS   (local)    YouTube API
 ```
 
 Cada etapa é isolada e independente, seguindo o princípio de que modelos de IA performam melhor quando fazem uma coisa de cada vez.
+
+A etapa de cenas tem dois modos, configuráveis por tipo (`imagens.modo`):
+
+- **`ia`** — cada frase vira um prompt de imagem (Groq) e uma imagem gerada por IA (Together / FLUX.2).
+- **`personagem`** — para cada frase, a IA decide a **emoção** do personagem e um **termo de busca**; o fundo é uma foto real de banco de imagens (Pexels) e o **PNG do personagem** correspondente à emoção é sobreposto num canto configurável (posição, tamanho e margens editáveis no painel), respeitando a área da interface do YouTube Shorts. Os PNGs do personagem (um por emoção; o `neutro` é obrigatório) são enviados pela aba Prompts do painel. Requer `PEXELS_API_KEY` no `.env` (chave gratuita em pexels.com/api).
 
 ## Tecnologias
 
@@ -25,7 +30,8 @@ Cada etapa é isolada e independente, seguindo o princípio de que modelos de IA
 |---|---|
 | Linguagem principal | Python |
 | Geração de roteiro e prompts | Groq API (Llama 3.3 70B) |
-| Geração de imagens | Together API (FLUX.2 Dev) |
+| Geração de imagens (modo ia) | Together API (FLUX.2 Dev) |
+| Fundos de cena (modo personagem) | Pexels API |
 | Narração | Google Cloud TTS |
 | Publicação | YouTube Data API v3 |
 | Painel web | FastAPI + Jinja2 + HTMX |

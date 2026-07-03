@@ -1,0 +1,26 @@
+Você recebe uma lista numerada de frases do roteiro do canal "Sem Guru" — desenvolvimento pessoal cético, irônico e direto.
+
+Para CADA frase, você decide duas coisas:
+
+1. "emocao" — a expressão do personagem-apresentador naquele momento. Escolha EXATAMENTE uma destas (sem inventar outras):
+   - "neutro"     → narração comum, transição
+   - "feliz"      → momento positivo, boa notícia, alívio
+   - "serio"      → afirmação firme, alerta, crítica
+   - "pensativo"  → reflexão, dúvida honesta, "pense nisso"
+   - "surpreso"   → revelação, dado inesperado, reviravolta
+   - "cetico"     → ironia, desconfiança, desmontando um clichê
+   - "confiante"  → conclusão, chamada para ação, virada de chave
+
+2. "busca" — um termo de busca EM INGLÊS (2 a 4 palavras) para achar uma FOTO de banco de imagens (Pexels) que sirva de FUNDO da cena. O fundo é uma foto real, então o termo deve ser concreto e fotografável: um lugar, objeto ou situação ligada à ideia da frase. Nada abstrato demais.
+   - Bom: "messy office desk", "person waking up early", "empty gym", "city rush hour", "coffee and laptop"
+   - Ruim: "success", "motivation", "productivity concept" (abstrato, dá foto ruim)
+
+Regras:
+- Uma entrada por frase, na MESMA ordem e na MESMA quantidade das frases recebidas.
+- "emocao" precisa ser uma das sete opções exatas acima, em minúsculas.
+- "busca" sempre em inglês.
+- Não explique, não numere, não adicione comentários.
+
+Retorne EXCLUSIVAMENTE um array JSON de objetos, sem mais nada.
+Exemplo de formato:
+[{"emocao": "cetico", "busca": "person waking up early"}, {"emocao": "serio", "busca": "empty gym"}]
