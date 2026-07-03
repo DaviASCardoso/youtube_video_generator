@@ -1,14 +1,17 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 import os
+import secrets
 import socket
 
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 from api import scheduler as scheduler_mod
-from api.routers import assets, configuracoes, execucoes, temas, tipos
+from api.auth import RequerLoginMiddleware, auth_ativo
+from api.routers import assets, auth, configuracoes, execucoes, temas, tipos
 from config.sistema import sistema
 
 BASE = Path(__file__).parent
@@ -38,6 +41,11 @@ async def lifespan(app: FastAPI):
     print(f"  Nesta máquina : http://127.0.0.1:{porta}")
     for ip in _ips_locais():
         print(f"  Na rede local : http://{ip}:{porta}  (requer --host 0.0.0.0)")
+    if auth_ativo():
+        print("  Login ATIVO (ADMIN_USER/ADMIN_PASSWORD do .env).")
+    else:
+        print("  AVISO: login DESATIVADO — qualquer um na rede acessa o painel.")
+        print("         Defina ADMIN_USER e ADMIN_PASSWORD no .env para exigir login.")
     print()
 
     yield
@@ -46,12 +54,24 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Gerador de Vídeos", lifespan=lifespan)
 
+# Ordem importa: o RequerLoginMiddleware lê scope["session"], então o
+# SessionMiddleware precisa ficar por fora (rodar antes). Como add_middleware
+# empilha de dentro para fora, o SessionMiddleware é adicionado por último.
+app.add_middleware(RequerLoginMiddleware)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET") or secrets.token_hex(32),
+    same_site="lax",
+    https_only=False,  # painel roda em HTTP na rede local
+)
+
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 _pasta_saida = Path(sistema.get("saida.pasta_base"))
 _pasta_saida.mkdir(parents=True, exist_ok=True)
 app.mount("/saida", StaticFiles(directory=_pasta_saida), name="saida")
 
+app.include_router(auth.router)
 app.include_router(configuracoes.router)
 app.include_router(tipos.router)
 app.include_router(assets.router)
