@@ -14,6 +14,37 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+
+# --- Testes de API real (opt-in) -------------------------------------------
+# Os testes marcados com @pytest.mark.real_api fazem chamadas de verdade às APIs
+# externas (gastam cota/dinheiro e precisam de rede + chaves). Ficam de fora do
+# `pytest` normal; rode com `pytest --real-api` para incluí-los.
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--real-api",
+        action="store_true",
+        default=False,
+        help="também roda os testes que fazem chamadas reais às APIs externas",
+    )
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "real_api: chamada real a uma API externa (precisa de --real-api e da chave)",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--real-api"):
+        return
+    pular = pytest.mark.skip(reason="precisa de --real-api (faz chamada real à API)")
+    for item in items:
+        if "real_api" in item.keywords:
+            item.add_marker(pular)
+
 _CHAVES_API = (
     "GROQ_API_KEY",
     "TOGETHER_API_KEY",
