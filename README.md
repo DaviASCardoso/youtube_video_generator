@@ -80,6 +80,29 @@ SESSION_SECRET=uma_string_longa_e_aleatoria
 
 ⚠️ O login roda sobre HTTP (sem HTTPS na rede local): ele mantém curiosos e outros dispositivos da rede de fora, mas a senha trafega sem criptografia — não é proteção contra alguém que consiga farejar o tráfego da rede. Sem `ADMIN_USER`/`ADMIN_PASSWORD`, o painel fica aberto: qualquer pessoa na mesma rede pode editar configurações, disparar gerações (que consomem cota das APIs pagas) e excluir tipos de vídeo.
 
+## Publicação no YouTube
+
+O vídeo pronto pode ser publicado automaticamente no YouTube. Cada tipo usa seu **próprio projeto Google Cloud** (um por canal, para isolar a cota de upload — ~6 uploads/dia por projeto), então as credenciais são **por tipo**:
+
+- `tipos/<id>/youtube_client_secret.json` — o OAuth client (Desktop app) baixado do projeto daquele canal. Se ausente, cai no `client_secret_youtube.json` da raiz.
+- `tipos/<id>/youtube_token.json` — criado no primeiro consentimento e reusado depois (gitignored).
+
+**Consentimento único** (abre o navegador, você autoriza o canal e o token é salvo):
+
+```
+python -m scripts.youtube auth --tipo cetico_pratico
+```
+
+Depois disso, ligue **"Publicar automaticamente no YouTube após gerar"** na aba Config do tipo. Recomendação: comece com a visibilidade em **`private`** — o vídeo sobe, mas só você vê, e você promove a público manualmente no YouTube Studio. O título vem do tema e a descrição do roteiro + a "descrição base" do config + `#Shorts` + as tags. A URL publicada aparece no histórico de execuções.
+
+Para publicar um vídeo já gerado na mão:
+
+```
+python -m scripts.youtube publicar caminho/para/video_final.mp4 --tipo cetico_pratico
+```
+
+⚠️ **Gotcha dos 7 dias:** enquanto o app OAuth estiver em modo **"Testing"** no Google Console, o token expira em 7 dias e a publicação para de funcionar. Ponha o app em **"In production"** (aceitando a tela de "app não verificado" no consentimento único) para tokens duráveis. Se o token expirar, rode o comando `auth` de novo.
+
 ## Testes
 
 A pasta `tests/` tem uma suíte de testes unitários (pytest) para toda a lógica fora da camada web — as camadas de configuração (`config/`) e os estágios/fontes do pipeline (`scripts/`). Todas as chamadas de API externas (Groq, Together, Google TTS, Pexels, Trends MCP, Gemini) são mockadas, então a suíte roda offline, rápida e sem gastar cota. Nenhum teste toca nas pastas reais (`tipos/`, `execucoes/`, `tendencias/`) nem no `config/sistema.json`.
@@ -113,7 +136,7 @@ Cada teste é pulado automaticamente se a chave correspondente não estiver no `
 - [x] Edição e montagem do vídeo
 - [x] Suporte a múltiplos tipos de vídeo (agendamento, prompts, voz e fila de temas independentes por tipo)
 - [x] Interface web para controle e monitoramento
-- [ ] Publicação automática
+- [x] Publicação no YouTube (com trava por tipo; sobe como privado por padrão)
 
 **Futuro**
 - [ ] Análise de desempenho dos vídeos publicados para refinamento automático do pipeline
