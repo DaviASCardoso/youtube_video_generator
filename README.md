@@ -32,10 +32,22 @@ A etapa de cenas tem dois modos, configuráveis por tipo (`imagens.modo`):
 | Geração de roteiro e prompts | Groq API (Llama 3.3 70B) |
 | Geração de imagens (modo ia) | Together API (FLUX.2 Dev) |
 | Fundos de cena (modo personagem) | Pexels API |
+| Fonte de temas por tendência | Trends MCP + Gemini 3.5 Flash |
 | Narração | Google Cloud TTS |
 | Publicação | YouTube Data API v3 |
 | Painel web | FastAPI + Jinja2 + HTMX |
 | Agendamento | APScheduler |
+
+## Fonte de temas por tendência (Trends MCP + Gemini)
+
+Além dos temas manuais, o sistema busca temas automaticamente a partir do que está em alta. Todo dia, no horário configurado (padrão **06:00**), um job global:
+
+1. Busca o tema em alta do dia no **Trends MCP** (uma única busca, compartilhada).
+2. Para cada tipo ativo, pula tendências já usadas por aquele tipo nos últimos dias (dedupe configurável), pegando a próxima do ranking.
+3. Chama o **Gemini 3.5 Flash** com o contexto do tipo (prompt editável `system_prompt_tendencia.txt`) para transformar a tendência num tema do canal.
+4. Adiciona o tema à fila do tipo com `fonte: "trends"`.
+
+Tudo é configurável na página de Configurações (ativar/desativar, horário, fuso, feed, prioridade, quantidade e janela de dedupe). Requer `TRENDS_MCP_API_KEY` e `GEMINI_API_KEY` no `.env`. Observação: o Trends MCP não filtra por região (Google Trends é global); a etapa do Gemini, com o contexto pt-BR do canal, reescreve a tendência para o público.
 
 ## Como rodar
 
@@ -73,4 +85,4 @@ Depois, descubra o IP local da máquina que está rodando o servidor (`ipconfig`
 
 **Futuro**
 - [ ] Análise de desempenho dos vídeos publicados para refinamento automático do pipeline
-- [ ] Detecção de tendências para adaptação dinâmica dos temas
+- [x] Detecção de tendências para adaptação dinâmica dos temas (Trends MCP + Gemini)
