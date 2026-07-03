@@ -9,5 +9,14 @@
     "fps": 24,
     "codec": "libx264",
     "audio_codec": "aac"
+  },
+  "tendencias": {
+    "ativo": true,
+    "horario": "06:00",
+    "fuso_horario": "America/Sao_Paulo",
+    "feed": "Google Trends",
+    "prioridade": 60,
+    "limite": 25,
+    "dias_historico": 14
   }
 }

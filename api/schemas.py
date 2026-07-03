@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, field_validator
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import re
 
-from config.constantes import FREQUENCIAS, MODOS_IMAGEM, VISIBILIDADES
+from config.constantes import FEEDS_TRENDS, FREQUENCIAS, MODOS_IMAGEM, VISIBILIDADES
 from scripts.compositor import POSICOES
 from scripts.generate_image import ASPECT_RATIOS
 
@@ -24,10 +24,44 @@ class SistemaVideo(BaseModel):
     audio_codec: str = Field(min_length=1)
 
 
+class SistemaTendencias(BaseModel):
+    ativo: bool
+    horario: str
+    fuso_horario: str
+    feed: str
+    prioridade: int = Field(ge=0, le=100)
+    limite: int = Field(ge=1, le=200)
+    dias_historico: int = Field(ge=1, le=365)
+
+    @field_validator("horario")
+    @classmethod
+    def _validar_horario(cls, v):
+        if not _HORARIO_RE.match(v):
+            raise ValueError("horario deve seguir o formato HH:MM (24h)")
+        return v
+
+    @field_validator("fuso_horario")
+    @classmethod
+    def _validar_fuso(cls, v):
+        try:
+            ZoneInfo(v)
+        except ZoneInfoNotFoundError:
+            raise ValueError(f"fuso_horario inválido: '{v}'")
+        return v
+
+    @field_validator("feed")
+    @classmethod
+    def _validar_feed(cls, v):
+        if v not in FEEDS_TRENDS:
+            raise ValueError(f"feed deve ser um de: {', '.join(FEEDS_TRENDS)}")
+        return v
+
+
 class SistemaConfig(BaseModel):
     execucao: SistemaExecucao
     saida: SistemaSaida
     video: SistemaVideo
+    tendencias: SistemaTendencias
 
 
 class GroqConfig(BaseModel):
