@@ -11,6 +11,7 @@ ARQUIVOS_TEXTO = (
     "system_prompt_script.txt",
     "system_prompt_prompt.txt",
     "system_prompt_cena.txt",
+    "system_prompt_tendencia.txt",
     "style_prompt.txt",
 )
 
