@@ -24,8 +24,8 @@
   },
   "tts": {
     "idioma": "pt-BR",
-    "voz": "pt-BR-Wavenet-B",
-    "velocidade": 1.0,
+    "voz": "pt-BR-Chirp3-HD-Enceladus",
+    "velocidade": 0.95,
     "pitch": 0.0
   },
   "pipeline": {
