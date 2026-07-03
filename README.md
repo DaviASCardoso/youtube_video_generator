@@ -81,6 +81,17 @@ pytest
 
 Convenção: cada nova função fora da parte web ganha um teste correspondente em `tests/`.
 
+### Testes de API real
+
+Além da suíte mockada, `tests/integration/` tem testes que fazem **chamadas reais** a cada API externa (Groq, Together, Google TTS, Pexels, Trends MCP, Gemini) — úteis para checar credenciais e conectividade. Eles ficam de fora do `pytest` normal (gastam cota/dinheiro e precisam de rede + chaves) e só rodam com a flag `--real-api`:
+
+```
+pytest --real-api                       # tudo (mockados + reais)
+pytest tests/integration --real-api     # só os reais
+```
+
+Cada teste é pulado automaticamente se a chave correspondente não estiver no `.env`.
+
 ## Roadmap
 
 **Em desenvolvimento**
