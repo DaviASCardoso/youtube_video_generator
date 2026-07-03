@@ -12,13 +12,29 @@ _TIPOS_DIR = Path(__file__).parent.parent / "tipos"
 DEFAULT_CONFIG = {
     "groq": {"modelo": "llama-3.3-70b-versatile", "temperatura": 0.8, "max_tokens": 4096},
     "together": {"modelo": "black-forest-labs/FLUX.2-dev", "steps": 20, "aspect_ratio": "16:9"},
+    "imagens": {
+        "modo": "ia",
+        "largura": 1080,
+        "altura": 1920,
+        "personagem": {
+            "posicao": "inferior_esquerdo",
+            "altura_percentual": 62,
+            "margem_lateral": 10,
+            "margem_vertical": 380,
+        },
+    },
     "tts": {"idioma": "pt-BR", "voz": "pt-BR-Wavenet-B", "velocidade": 1.0, "pitch": 0.0},
     "pipeline": {"min_chars_por_periodo": 20},
     "agendamento": {"frequencia": "daily", "horario": "14:00", "fuso_horario": "America/Sao_Paulo"},
     "youtube": {"categoria_id": "22", "visibilidade": "private", "tags": []},
 }
 
-ASSETS_PADRAO = ("system_prompt_script.txt", "system_prompt_prompt.txt", "style_prompt.txt")
+ASSETS_PADRAO = (
+    "system_prompt_script.txt",
+    "system_prompt_prompt.txt",
+    "system_prompt_cena.txt",
+    "style_prompt.txt",
+)
 
 
 @dataclass
