@@ -11,6 +11,17 @@
     "steps": 20,
     "aspect_ratio": "16:9"
   },
+  "imagens": {
+    "modo": "personagem",
+    "largura": 1080,
+    "altura": 1920,
+    "personagem": {
+      "posicao": "inferior_esquerdo",
+      "altura_percentual": 62,
+      "margem_lateral": 10,
+      "margem_vertical": 380
+    }
+  },
   "tts": {
     "idioma": "pt-BR",
     "voz": "pt-BR-Wavenet-B",
