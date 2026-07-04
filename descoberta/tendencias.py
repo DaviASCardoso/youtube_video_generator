@@ -1,25 +1,18 @@
-"""Coleta diária de temas por tendência (Trends MCP + Gemini).
+"""Armazenamento de sinais já consumidos por tipo (dedupe) + prompt de critério.
 
-Fluxo do job das 06:00 (`coletar_temas_do_dia`):
-  1. Uma única busca de tendências (compartilhada entre todos os tipos).
-  2. Para cada tipo ativo: escolhe a 1ª tendência que NÃO foi usada por aquele
-     tipo nas últimas N semanas (dedupe), chama o Gemini com o contexto do tipo
-     para virar um tema, coloca na fila (fonte="trends") e registra a tendência
-     usada no histórico (para o dedupe dos próximos dias).
+`HistoricoTendencias` guarda cada sinal (tendência crua) que a Descoberta já
+consumiu por tipo — a fonte de verdade do dedupe, já que o pool de ideias não
+guarda a tendência crua e o histórico de execuções guarda o tema gerado (não a
+tendência). Consumido por `descoberta.dedup`.
 
-`HistoricoTendencias` é o armazenamento das tendências já usadas por tipo — a
-fila de temas não guarda a tendência crua, e o histórico de execuções guarda o
-tema gerado (não a tendência), então o dedupe precisa do próprio registro.
+`_prompt_do_tipo` / `_default_prompt_tendencia` resolvem o prompt de critério/
+persona do tipo (system_prompt_tendencia.txt), usado pela avaliação de fit.
 """
 
 import json
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-from config.sistema import sistema
-from config.tipos import listar_tipos_ativos
-from descoberta import gemini, trends
 
 BASE = Path(__file__).parent
 _HISTORICO_PATH = BASE.parent / "tendencias" / "historico.json"
@@ -114,83 +107,3 @@ def _prompt_do_tipo(tipo) -> str:
         if conteudo:
             return conteudo
     return _default_prompt_tendencia()
-
-
-def _escolher_tendencia(nomes: list[str], recentes: set[str]) -> str | None:
-    """Primeira tendência (em ordem de ranking) ainda não usada recentemente."""
-    for nome in nomes:
-        if _normalizar(nome) not in recentes:
-            return nome
-    return None
-
-
-def coletar_temas_do_dia(dry_run: bool = False) -> dict:
-    """Executa um ciclo de coleta: uma busca de tendências + um tema por tipo ativo.
-
-    Args:
-        dry_run: Se True, não adiciona à fila nem registra no histórico — só
-            calcula e imprime o que faria (para testes).
-
-    Returns:
-        Resumo do ciclo (por tipo: tendência escolhida e tema gerado, ou o motivo
-        de ter pulado).
-    """
-    if not sistema.get("tendencias.ativo"):
-        print("[tendências] desativado nas configurações, nada a fazer.")
-        return {"ativo": False, "tipos": []}
-
-    feed = sistema.get("tendencias.feed")
-    limite = sistema.get("tendencias.limite")
-    prioridade = sistema.get("tendencias.prioridade")
-    dias = sistema.get("tendencias.dias_historico")
-
-    print(f"[tendências] buscando '{feed}' (limite {limite})...")
-    nomes = trends.buscar_tendencias(feed=feed, limite=limite)
-    if not nomes:
-        print("[tendências] nenhuma tendência retornada — pulando o dia.")
-        return {"ativo": True, "feed": feed, "erro": "sem tendências", "tipos": []}
-
-    resumo = {"ativo": True, "feed": feed, "tipos": []}
-
-    for tipo in listar_tipos_ativos():
-        recentes = historico_tendencias.trends_recentes(tipo.id, dias)
-        escolhido = _escolher_tendencia(nomes, recentes)
-
-        if escolhido is None:
-            print(f"  [{tipo.nome}] todas as {len(nomes)} tendências já foram usadas em {dias} dias — pulando.")
-            resumo["tipos"].append({"tipo_id": tipo.id, "status": "todas_repetidas"})
-            continue
-
-        try:
-            gerado = gemini.gerar_tema_de_tendencia(escolhido, _prompt_do_tipo(tipo))
-        except Exception as e:
-            print(f"  [{tipo.nome}] falha no Gemini para '{escolhido}': {e}")
-            resumo["tipos"].append({"tipo_id": tipo.id, "status": "erro_gemini", "erro": str(e)})
-            continue
-
-        if dry_run:
-            print(f"  [{tipo.nome}] (dry-run) tendência='{escolhido}' -> tema='{gerado.tema}'")
-        else:
-            tipo.temas.adicionar(gerado.tema, prioridade, fonte="trends")
-            historico_tendencias.registrar(tipo.id, escolhido, feed, gerado.tema)
-            print(f"  [{tipo.nome}] tendência='{escolhido}' -> tema='{gerado.tema}' (adicionado à fila)")
-
-        resumo["tipos"].append(
-            {
-                "tipo_id": tipo.id,
-                "status": "ok",
-                "tendencia": escolhido,
-                "tema": gerado.tema,
-            }
-        )
-
-    return resumo
-
-
-if __name__ == "__main__":
-    import sys
-
-    seco = "--commit" not in sys.argv  # por padrão roda em dry-run (não mexe na fila)
-    if seco:
-        print("Rodando em DRY-RUN (não adiciona à fila). Use --commit para valer.\n")
-    coletar_temas_do_dia(dry_run=seco)

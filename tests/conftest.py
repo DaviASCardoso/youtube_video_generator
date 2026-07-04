@@ -14,6 +14,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from descoberta.configuracao import DESCOBERTA_PADRAO
+
 
 # --- Testes de API real (opt-in) -------------------------------------------
 # Os testes marcados com @pytest.mark.real_api fazem chamadas de verdade às APIs
@@ -106,6 +108,7 @@ _CONFIG_TIPO_PADRAO = {
         "publicar": False,
         "descricao_base": "",
     },
+    "descoberta": DESCOBERTA_PADRAO,
 }
 
 
@@ -158,15 +161,6 @@ def sistema_temp(monkeypatch):
         "execucao": {"max_simultaneo": 1},
         "saida": {"pasta_base": "output"},
         "video": {"fps": 24, "codec": "libx264", "audio_codec": "aac"},
-        "tendencias": {
-            "ativo": True,
-            "horario": "06:00",
-            "fuso_horario": "America/Sao_Paulo",
-            "feed": "Google Trends",
-            "prioridade": 60,
-            "limite": 25,
-            "dias_historico": 14,
-        },
     }
     sistema._config = json.loads(json.dumps(valores))
     yield sistema

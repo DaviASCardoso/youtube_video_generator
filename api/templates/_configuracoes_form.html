@@ -49,48 +49,8 @@
     </label>
   </fieldset>
 
-  <fieldset>
-    <legend>Tendências (Trends MCP + Gemini)</legend>
-    <p><small>Todo dia no horário abaixo, busca o tema em alta e, para cada tipo ativo, gera um
-    tema com o Gemini e adiciona à fila (fonte "trends"). Pula tendências já usadas pelo tipo nos
-    últimos dias. Requer <code>TRENDS_MCP_API_KEY</code> e <code>GEMINI_API_KEY</code> no .env.</small></p>
-    <label>
-      <input type="checkbox" name="tendencias_ativo" {% if config.tendencias.ativo %}checked{% endif %}
-             style="width:auto; display:inline-block; margin-right:0.4rem">
-      Ativo
-    </label>
-    <label>
-      <span class="rotulo">Horário (HH:MM)</span>
-      <input type="time" name="tendencias_horario" value="{{ config.tendencias.horario }}" required>
-    </label>
-    <label>
-      <span class="rotulo">Fuso horário (ex: America/Sao_Paulo)</span>
-      <input type="text" name="tendencias_fuso_horario" value="{{ config.tendencias.fuso_horario }}" required>
-    </label>
-    <label>
-      <span class="rotulo">Feed de tendências</span>
-      <select name="tendencias_feed" required>
-        {% for opcao in feeds %}
-        <option value="{{ opcao }}" {% if config.tendencias.feed == opcao %}selected{% endif %}>{{ opcao }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      <span class="rotulo">Prioridade na fila (0–100)</span>
-      <input type="number" name="tendencias_prioridade" min="0" max="100" step="1"
-             value="{{ config.tendencias.prioridade }}" required>
-    </label>
-    <label>
-      <span class="rotulo">Quantas tendências buscar (1–200)</span>
-      <input type="number" name="tendencias_limite" min="1" max="200" step="1"
-             value="{{ config.tendencias.limite }}" required>
-    </label>
-    <label>
-      <span class="rotulo">Janela de dedupe (dias) — não repetir uma tendência usada nos últimos N dias</span>
-      <input type="number" name="tendencias_dias_historico" min="1" max="365" step="1"
-             value="{{ config.tendencias.dias_historico }}" required>
-    </label>
-  </fieldset>
+  <p><small>As configurações de descoberta de temas (tendências, fit, dedupe, seleção)
+  agora são por tipo de vídeo — veja a aba <strong>Descoberta</strong> na edição de cada tipo.</small></p>
 
   <button type="submit">Salvar</button>
 </form>

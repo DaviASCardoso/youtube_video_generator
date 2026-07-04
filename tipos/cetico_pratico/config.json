@@ -44,5 +44,64 @@
       "inteligência artificial",
       "automação"
     ]
+  },
+  "descoberta": {
+    "antecedencia_horas": 2,
+    "fontes": {
+      "trends_mcp": {
+        "ativo": true,
+        "feed": "Google Trends",
+        "limite": 25
+      },
+      "youtube": {
+        "ativo": false,
+        "limite": 15,
+        "consultas": [],
+        "canais_nicho": [],
+        "regiao": "BR"
+      },
+      "google_trends": {
+        "ativo": true,
+        "limite": 20,
+        "geo": "BR"
+      },
+      "reddit": {
+        "ativo": true,
+        "subreddits": [
+          "brasil",
+          "desabafos"
+        ],
+        "limite": 20,
+        "periodo": "day"
+      },
+      "wikipedia": {
+        "ativo": true,
+        "limite": 20
+      },
+      "manual": {
+        "ativo": true
+      },
+      "evergreen": {
+        "ativo": true
+      }
+    },
+    "fit": {
+      "score_minimo": 60
+    },
+    "dedup": {
+      "dias": 14,
+      "estrategia": "token",
+      "limiar": 0.8
+    },
+    "selecao": {
+      "peso_sinal": 0.4,
+      "peso_fit": 0.4,
+      "peso_frescor": 0.2,
+      "meia_vida_horas": 48
+    },
+    "evergreen_ratio": 0.3,
+    "modo_revisao": "auto",
+    "retencao": "descartar",
+    "orcamento_avaliacao": 3
   }
 }

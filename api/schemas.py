@@ -3,6 +3,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import re
 
 from config.constantes import FEEDS_TRENDS, FREQUENCIAS, MODOS_IMAGEM, VISIBILIDADES
+from descoberta.configuracao import (
+    ESTRATEGIAS_DEDUP,
+    MODOS_REVIEW,
+    POLITICAS_RETENCAO,
+    REDDIT_PERIODOS,
+)
 from geracao.compositor import POSICOES
 from geracao.generate_image import ASPECT_RATIOS
 
@@ -24,44 +30,10 @@ class SistemaVideo(BaseModel):
     audio_codec: str = Field(min_length=1)
 
 
-class SistemaTendencias(BaseModel):
-    ativo: bool
-    horario: str
-    fuso_horario: str
-    feed: str
-    prioridade: int = Field(ge=0, le=100)
-    limite: int = Field(ge=1, le=200)
-    dias_historico: int = Field(ge=1, le=365)
-
-    @field_validator("horario")
-    @classmethod
-    def _validar_horario(cls, v):
-        if not _HORARIO_RE.match(v):
-            raise ValueError("horario deve seguir o formato HH:MM (24h)")
-        return v
-
-    @field_validator("fuso_horario")
-    @classmethod
-    def _validar_fuso(cls, v):
-        try:
-            ZoneInfo(v)
-        except ZoneInfoNotFoundError:
-            raise ValueError(f"fuso_horario inválido: '{v}'")
-        return v
-
-    @field_validator("feed")
-    @classmethod
-    def _validar_feed(cls, v):
-        if v not in FEEDS_TRENDS:
-            raise ValueError(f"feed deve ser um de: {', '.join(FEEDS_TRENDS)}")
-        return v
-
-
 class SistemaConfig(BaseModel):
     execucao: SistemaExecucao
     saida: SistemaSaida
     video: SistemaVideo
-    tendencias: SistemaTendencias
 
 
 class GroqConfig(BaseModel):
@@ -173,6 +145,116 @@ class YoutubeConfig(BaseModel):
         return v
 
 
+class FonteTrendsMcpConfig(BaseModel):
+    ativo: bool
+    feed: str
+    limite: int = Field(ge=1, le=200)
+
+    @field_validator("feed")
+    @classmethod
+    def _validar_feed(cls, v):
+        if v not in FEEDS_TRENDS:
+            raise ValueError(f"feed deve ser um de: {', '.join(FEEDS_TRENDS)}")
+        return v
+
+
+class FonteYoutubeConfig(BaseModel):
+    ativo: bool
+    limite: int = Field(ge=1, le=50)
+    consultas: list[str] = Field(default_factory=list)
+    canais_nicho: list[str] = Field(default_factory=list)
+    regiao: str = Field(pattern=r"^[A-Z]{2}$")
+
+
+class FonteGoogleTrendsConfig(BaseModel):
+    ativo: bool
+    limite: int = Field(ge=1, le=100)
+    geo: str = Field(pattern=r"^[A-Z]{2}$")
+
+
+class FonteRedditConfig(BaseModel):
+    ativo: bool
+    subreddits: list[str] = Field(default_factory=list)
+    limite: int = Field(ge=1, le=100)
+    periodo: str
+
+    @field_validator("periodo")
+    @classmethod
+    def _validar_periodo(cls, v):
+        if v not in REDDIT_PERIODOS:
+            raise ValueError(f"periodo deve ser um de: {', '.join(REDDIT_PERIODOS)}")
+        return v
+
+
+class FonteWikipediaConfig(BaseModel):
+    ativo: bool
+    limite: int = Field(ge=1, le=100)
+
+
+class FontePoolConfig(BaseModel):
+    ativo: bool
+
+
+class FontesConfig(BaseModel):
+    trends_mcp: FonteTrendsMcpConfig
+    youtube: FonteYoutubeConfig
+    google_trends: FonteGoogleTrendsConfig
+    reddit: FonteRedditConfig
+    wikipedia: FonteWikipediaConfig
+    manual: FontePoolConfig
+    evergreen: FontePoolConfig
+
+
+class FitConfig(BaseModel):
+    score_minimo: int = Field(ge=0, le=100)
+
+
+class DedupConfig(BaseModel):
+    dias: int = Field(ge=1, le=365)
+    estrategia: str
+    limiar: float = Field(ge=0.0, le=1.0)
+
+    @field_validator("estrategia")
+    @classmethod
+    def _validar_estrategia(cls, v):
+        if v not in ESTRATEGIAS_DEDUP:
+            raise ValueError(f"estrategia deve ser uma de: {', '.join(ESTRATEGIAS_DEDUP)}")
+        return v
+
+
+class SelecaoConfig(BaseModel):
+    peso_sinal: float = Field(ge=0.0, le=1.0)
+    peso_fit: float = Field(ge=0.0, le=1.0)
+    peso_frescor: float = Field(ge=0.0, le=1.0)
+    meia_vida_horas: float = Field(gt=0.0, le=8760.0)
+
+
+class DescobertaConfig(BaseModel):
+    antecedencia_horas: int = Field(ge=0, le=168)
+    fontes: FontesConfig
+    fit: FitConfig
+    dedup: DedupConfig
+    selecao: SelecaoConfig
+    evergreen_ratio: float = Field(ge=0.0, le=1.0)
+    modo_revisao: str
+    retencao: str
+    orcamento_avaliacao: int = Field(ge=1, le=20)
+
+    @field_validator("modo_revisao")
+    @classmethod
+    def _validar_modo_revisao(cls, v):
+        if v not in MODOS_REVIEW:
+            raise ValueError(f"modo_revisao deve ser um de: {', '.join(MODOS_REVIEW)}")
+        return v
+
+    @field_validator("retencao")
+    @classmethod
+    def _validar_retencao(cls, v):
+        if v not in POLITICAS_RETENCAO:
+            raise ValueError(f"retencao deve ser uma de: {', '.join(POLITICAS_RETENCAO)}")
+        return v
+
+
 class TipoConfig(BaseModel):
     nome: str = Field(min_length=1)
     ativo: bool
@@ -183,6 +265,7 @@ class TipoConfig(BaseModel):
     pipeline: PipelineConfig
     agendamento: AgendamentoConfig
     youtube: YoutubeConfig
+    descoberta: DescobertaConfig
 
 
 class CriarTipoForm(BaseModel):
