@@ -3,12 +3,12 @@ from types import SimpleNamespace
 import pytest
 
 from descoberta import gemini
-from descoberta.gemini import TemaTendencia, gerar_tema_de_tendencia
+from descoberta.gemini import AvaliacaoFit, avaliar_fit
 
 
 def test_sem_chave_levanta_runtimeerror():
     with pytest.raises(RuntimeError):
-        gerar_tema_de_tendencia("trend", "prompt")
+        avaliar_fit("candidato", "prompt")
 
 
 def _cliente_fake(resposta):
@@ -28,21 +28,25 @@ def _cliente_fake(resposta):
 
 def test_retorna_parsed(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "abc")
-    tema = TemaTendencia(tema="Foco", justificativa="porque sim")
+    avaliacao = AvaliacaoFit(aceito=True, score=82, tema="Foco", justificativa="cabe")
     monkeypatch.setattr(
-        gemini.genai, "Client", _cliente_fake(SimpleNamespace(parsed=tema))
+        gemini.genai, "Client", _cliente_fake(SimpleNamespace(parsed=avaliacao))
     )
-    resultado = gerar_tema_de_tendencia("trend", "prompt")
+    resultado = avaliar_fit("candidato", "prompt")
+    assert resultado.aceito is True
+    assert resultado.score == 82
     assert resultado.tema == "Foco"
 
 
 def test_fallback_para_text_quando_parsed_ausente(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "abc")
-    texto = '{"tema": "Disciplina", "justificativa": "j"}'
+    texto = '{"aceito": false, "score": 10, "tema": "Disciplina", "justificativa": "j"}'
     monkeypatch.setattr(
         gemini.genai,
         "Client",
         _cliente_fake(SimpleNamespace(parsed=None, text=texto)),
     )
-    resultado = gerar_tema_de_tendencia("trend", "prompt")
+    resultado = avaliar_fit("candidato", "prompt")
+    assert resultado.aceito is False
+    assert resultado.score == 10
     assert resultado.tema == "Disciplina"
