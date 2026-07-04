@@ -2,30 +2,32 @@
 <div class="aviso erro">{{ erro }}</div>
 {% endif %}
 
+<p><small>Pool de ideias que a Descoberta considera como fonte input-side. <strong>manual</strong> =
+ideias específicas curadas; <strong>evergreen</strong> = temas atemporais. A prioridade define a ordem
+de preferência dentro do pool.</small></p>
+
 <form hx-post="/tipos/{{ tipo.id }}/temas" hx-target="#temas-tab" hx-swap="innerHTML">
   <label>
-    <span class="rotulo">Novo tema</span>
+    <span class="rotulo">Nova ideia</span>
     <input type="text" name="tema" required>
   </label>
   <label>
-    <span class="rotulo">Prioridade (0–100, maior = mais cedo)</span>
-    <input type="number" name="prioridade" min="0" max="100" value="50" required>
+    <span class="rotulo">Categoria</span>
+    <select name="fonte" required>
+      <option value="manual">manual</option>
+      <option value="evergreen">evergreen</option>
+    </select>
   </label>
   <label>
-    <span class="rotulo">Fonte</span>
-    <input list="fontes-tema" name="fonte" value="manual">
-    <datalist id="fontes-tema">
-      {% for f in fontes %}
-      <option value="{{ f }}">
-      {% endfor %}
-    </datalist>
+    <span class="rotulo">Prioridade no pool (0–100, maior = considerada primeiro)</span>
+    <input type="number" name="prioridade" min="0" max="100" value="50" required>
   </label>
-  <button type="submit">Adicionar à fila</button>
+  <button type="submit">Adicionar ao pool</button>
 </form>
 
 <table style="margin-top:1rem">
   <thead>
-    <tr><th>#</th><th>Tema</th><th>Prioridade</th><th>Fonte</th><th>Ações</th></tr>
+    <tr><th>#</th><th>Ideia</th><th>Prioridade</th><th>Categoria</th><th>Ações</th></tr>
   </thead>
   <tbody>
     {% for t in temas %}
@@ -44,20 +46,20 @@
       <td>{{ t.fonte }}</td>
       <td>
         <button class="secundario perigo" hx-delete="/tipos/{{ tipo.id }}/temas/{{ loop.index0 }}"
-                hx-target="#temas-tab" hx-swap="innerHTML" hx-confirm="Remover este tema da fila?">
+                hx-target="#temas-tab" hx-swap="innerHTML" hx-confirm="Remover esta ideia do pool?">
           Remover
         </button>
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="5">Fila vazia.</td></tr>
+    <tr><td colspan="5">Pool vazio.</td></tr>
     {% endfor %}
   </tbody>
 </table>
 
 {% if temas %}
 <button class="secundario perigo" style="margin-top:0.75rem" hx-delete="/tipos/{{ tipo.id }}/temas"
-        hx-target="#temas-tab" hx-swap="innerHTML" hx-confirm="Limpar toda a fila de temas? Essa ação não pode ser desfeita.">
-  Limpar fila inteira
+        hx-target="#temas-tab" hx-swap="innerHTML" hx-confirm="Limpar todo o pool de ideias? Essa ação não pode ser desfeita.">
+  Limpar pool inteiro
 </button>
 {% endif %}
