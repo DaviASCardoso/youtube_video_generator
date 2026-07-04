@@ -10,6 +10,22 @@ O sistema suporta múltiplos **tipos de vídeo** rodando lado a lado (ex: canais
 
 Um **painel web** (`uvicorn api.app:app`) permite controlar tudo isso sem editar arquivos JSON ou rodar scripts manualmente: criar/editar/duplicar/renomear/excluir tipos, editar prompts e configurações com validação, gerenciar a fila de temas, disparar execuções manuais e acompanhar logs ao vivo e o histórico de execuções.
 
+## Arquitetura: os sete pilares
+
+O sistema é organizado em **sete pilares**, cada um com uma responsabilidade clara e um lar próprio no repositório. Este é o mapa mental do projeto — comece por aqui.
+
+| Pilar | Responsabilidade | Lar |
+|---|---|---|
+| **Descoberta** | Decidir o que fazer: sinais/tendências, transformar em tema, deduplicar e manter a fila priorizada. | `descoberta/` |
+| **Geração** | Transformar o tema no artefato de mídia final: roteiro, imagens, narração e montagem do vídeo. | `geracao/` |
+| **Publicação** | Levar o artefato até a plataforma: metadados, upload, visibilidade. | `publicacao/` |
+| **Controle** | Superfície humana: painel web, camadas de configuração, histórico e logs. | `api/` + `config/` |
+| **Feedback** | Fechar o ciclo com o desempenho real: analytics → entradas que os produziram. | `feedback/` *(placeholder)* |
+| **Operações** | Rodar sem supervisão: agendamento, orquestração, erros, segredos, custo. *(transversal)* | `operacoes/` |
+| **Conformidade** | Ficar dentro das regras da plataforma: divulgação de mídia sintética, autenticidade. | `conformidade/` *(placeholder)* |
+
+Cada pilar tem um `README.md` próprio detalhando seus módulos. **Controle** mantém dois lares existentes e já bem nomeados (`api/` para a app web, `config/` para as camadas de configuração). **Feedback** e **Conformidade** ainda não têm código — são lares reservados. Pastas de dados de runtime (`output/`, `execucoes/`, `tendencias/`) e o conteúdo por tipo (`tipos/`) não são código e ficam na raiz.
+
 ## Pipeline
 
 ```
@@ -90,7 +106,7 @@ O vídeo pronto pode ser publicado automaticamente no YouTube. Cada tipo usa seu
 **Consentimento único** (abre o navegador, você autoriza o canal e o token é salvo):
 
 ```
-python -m scripts.youtube auth --tipo cetico_pratico
+python -m publicacao.youtube auth --tipo cetico_pratico
 ```
 
 Depois disso, ligue **"Publicar automaticamente no YouTube após gerar"** na aba Config do tipo. Recomendação: comece com a visibilidade em **`private`** — o vídeo sobe, mas só você vê, e você promove a público manualmente no YouTube Studio. O título vem do tema e a descrição do roteiro + a "descrição base" do config + `#Shorts` + as tags. A URL publicada aparece no histórico de execuções.
@@ -98,14 +114,14 @@ Depois disso, ligue **"Publicar automaticamente no YouTube após gerar"** na aba
 Para publicar um vídeo já gerado na mão:
 
 ```
-python -m scripts.youtube publicar caminho/para/video_final.mp4 --tipo cetico_pratico
+python -m publicacao.youtube publicar caminho/para/video_final.mp4 --tipo cetico_pratico
 ```
 
 ⚠️ **Gotcha dos 7 dias:** enquanto o app OAuth estiver em modo **"Testing"** no Google Console, o token expira em 7 dias e a publicação para de funcionar. Ponha o app em **"In production"** (aceitando a tela de "app não verificado" no consentimento único) para tokens duráveis. Se o token expirar, rode o comando `auth` de novo.
 
 ## Testes
 
-A pasta `tests/` tem uma suíte de testes unitários (pytest) para toda a lógica fora da camada web — as camadas de configuração (`config/`) e os estágios/fontes do pipeline (`scripts/`). Todas as chamadas de API externas (Groq, Together, Google TTS, Pexels, Trends MCP, Gemini) são mockadas, então a suíte roda offline, rápida e sem gastar cota. Nenhum teste toca nas pastas reais (`tipos/`, `execucoes/`, `tendencias/`) nem no `config/sistema.json`.
+A pasta `tests/` tem uma suíte de testes unitários (pytest) para toda a lógica fora da camada web — as camadas de configuração (`config/`) e os pilares de código (`geracao/`, `descoberta/`, `publicacao/`, `operacoes/`). Todas as chamadas de API externas (Groq, Together, Google TTS, Pexels, Trends MCP, Gemini) são mockadas, então a suíte roda offline, rápida e sem gastar cota. Nenhum teste toca nas pastas reais (`tipos/`, `execucoes/`, `tendencias/`) nem no `config/sistema.json`.
 
 ```
 pip install -r requirements-dev.txt
