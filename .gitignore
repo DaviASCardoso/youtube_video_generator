@@ -9,3 +9,6 @@ prototipo_personagem/saida/
 client_secret_youtube.json
 tipos/*/youtube_client_secret.json
 tipos/*/youtube_token.json
+tipos/*/descoberta_slot.json
+tipos/*/descoberta_buffer.json
+tipos/*/descoberta_historico.json
