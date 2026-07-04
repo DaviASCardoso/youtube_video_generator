@@ -6,9 +6,9 @@
 
 Pipeline 100% automatizado para geração e publicação periódica de vídeos longos no YouTube. Cada etapa é delegada a um modelo de IA especializado — do roteiro à publicação — sem intervenção humana.
 
-O sistema suporta múltiplos **tipos de vídeo** rodando lado a lado (ex: canais ou personas diferentes), cada um com seu próprio agendamento, prompts, voz, configurações de geração e fila de temas. Cada tipo vive em sua própria pasta dentro de `tipos/`.
+O sistema suporta múltiplos **tipos de vídeo** rodando lado a lado (ex: canais ou personas diferentes), cada um com seu próprio agendamento, prompts, voz, configurações de geração, descoberta de temas e pool de ideias. Cada tipo vive em sua própria pasta dentro de `tipos/`.
 
-Um **painel web** (`uvicorn api.app:app`) permite controlar tudo isso sem editar arquivos JSON ou rodar scripts manualmente: criar/editar/duplicar/renomear/excluir tipos, editar prompts e configurações com validação, gerenciar a fila de temas, disparar execuções manuais e acompanhar logs ao vivo e o histórico de execuções.
+Um **painel web** (`uvicorn api.app:app`) permite controlar tudo isso sem editar arquivos JSON ou rodar scripts manualmente: criar/editar/duplicar/renomear/excluir tipos, editar prompts e configurações com validação, ajustar a descoberta e o pool de ideias, disparar execuções manuais e acompanhar logs ao vivo e o histórico de execuções.
 
 ## Arquitetura: os sete pilares
 
@@ -16,7 +16,7 @@ O sistema é organizado em **sete pilares**, cada um com uma responsabilidade cl
 
 | Pilar | Responsabilidade | Lar |
 |---|---|---|
-| **Descoberta** | Decidir o que fazer: sinais/tendências, transformar em tema, deduplicar e manter a fila priorizada. | `descoberta/` |
+| **Descoberta** | Decidir o que fazer: reunir sinais de várias fontes, avaliar fit, deduplicar e decidir **um único tema** por tipo a cada ciclo. | `descoberta/` |
 | **Geração** | Transformar o tema no artefato de mídia final: roteiro, imagens, narração e montagem do vídeo. | `geracao/` |
 | **Publicação** | Levar o artefato até a plataforma: metadados, upload, visibilidade. | `publicacao/` |
 | **Controle** | Superfície humana: painel web, camadas de configuração, histórico e logs. | `api/` + `config/` |
@@ -48,22 +48,33 @@ A etapa de cenas tem dois modos, configuráveis por tipo (`imagens.modo`):
 | Geração de roteiro e prompts | Groq API (Llama 3.3 70B) |
 | Geração de imagens (modo ia) | Together API (FLUX.2 Dev) |
 | Fundos de cena (modo personagem) | Pexels API |
-| Fonte de temas por tendência | Trends MCP + Gemini 3.5 Flash |
+| Descoberta de temas | Trends MCP, YouTube, Google Trends, Reddit, Wikipédia + Gemini 3.5 Flash |
 | Narração | Google Cloud TTS |
 | Publicação | YouTube Data API v3 |
 | Painel web | FastAPI + Jinja2 + HTMX |
 | Agendamento | APScheduler |
 
-## Fonte de temas por tendência (Trends MCP + Gemini)
+## Descoberta de temas (por tipo)
 
-Além dos temas manuais, o sistema busca temas automaticamente a partir do que está em alta. Todo dia, no horário configurado (padrão **06:00**), um job global:
+Cada tipo decide sozinho **o que produzir a seguir**. A Descoberta roda
+`antecedencia_horas` antes do horário de geração do tipo (configurável no painel)
+e decide **um único tema**:
 
-1. Busca o tema em alta do dia no **Trends MCP** (uma única busca, compartilhada).
-2. Para cada tipo ativo, pula tendências já usadas por aquele tipo nos últimos dias (dedupe configurável), pegando a próxima do ranking.
-3. Chama o **Gemini 3.5 Flash** com o contexto do tipo (prompt editável `system_prompt_tendencia.txt`) para transformar a tendência num tema do canal.
-4. Adiciona o tema à fila do tipo com `fonte: "trends"`.
+1. Reúne candidatos das fontes ativas: **Trends MCP**, **YouTube** (Data API v3),
+   **Google Trends** (pytrends-modern), **Reddit** (feeds .rss), **Wikipédia**
+   (Pageviews) e o **pool de ideias** manuais/evergreen. Cada fonte liga/desliga.
+2. Deduplica contra o que já foi feito (janela e estratégia configuráveis).
+3. Faz um pré-rank barato e avalia o **fit** (Gemini) só nos top candidatos —
+   aceita/rejeita com um score, guiado por `system_prompt_tendencia.txt`.
+4. Seleciona um por pontuação ponderada (sinal + fit + frescor) e o deposita no
+   slot do tipo. Em modo **revisar**, o tema fica pendente até você aprovar.
+5. No horário de geração, o vídeo é feito a partir desse tema decidido.
 
-Tudo é configurável na página de Configurações (ativar/desativar, horário, fuso, feed, prioridade, quantidade e janela de dedupe). Requer `TRENDS_MCP_API_KEY` e `GEMINI_API_KEY` no `.env`. Observação: o Trends MCP não filtra por região (Google Trends é global); a etapa do Gemini, com o contexto pt-BR do canal, reescreve a tendência para o público.
+Tudo é configurável na aba **Descoberta** de cada tipo (fontes e seus parâmetros,
+score mínimo, dedupe, pesos de seleção, mix trending/evergreen, gate de revisão,
+retenção, orçamento de avaliação e antecedência). As ideias manuais/evergreen
+ficam na aba **Ideias**. Requer `TRENDS_MCP_API_KEY` e `GEMINI_API_KEY` no `.env`
+(YouTube precisa do OAuth do tipo; Reddit e Wikipédia são sem chave).
 
 ## Como rodar
 
@@ -156,4 +167,4 @@ Cada teste é pulado automaticamente se a chave correspondente não estiver no `
 
 **Futuro**
 - [ ] Análise de desempenho dos vídeos publicados para refinamento automático do pipeline
-- [x] Detecção de tendências para adaptação dinâmica dos temas (Trends MCP + Gemini)
+- [x] Descoberta de temas por tipo (5 fontes de sinal + pool, fit com score, dedupe, seleção ponderada, gate de revisão)
