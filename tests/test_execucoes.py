@@ -1,7 +1,7 @@
 import pytest
 
-from scripts import execucoes
-from scripts.execucoes import (
+from operacoes import execucoes
+from operacoes.execucoes import (
     ExecucaoEmAndamentoError,
     HistoricoExecucoes,
     _TransmissorLog,
@@ -127,7 +127,7 @@ def test_transmissor_desassinar_para_de_receber():
 
 def test_publicar_desligado_nao_chama_youtube(make_tipo, monkeypatch, tmp_path):
     tipo = make_tipo(config_extra=_youtube_cfg(publicar=False))
-    import scripts.youtube as y
+    import publicacao.youtube as y
 
     chamou = []
     monkeypatch.setattr(y, "publicar_video", lambda *a, **k: chamou.append(1))
@@ -146,7 +146,7 @@ def test_publicar_ligado_publica_e_registra_url(make_tipo, monkeypatch, tmp_path
     video.write_bytes(b"x")
     (video.parent / "roteiro.txt").write_text("meu roteiro", encoding="utf-8")
 
-    import scripts.youtube as y
+    import publicacao.youtube as y
 
     capturado = {}
 
@@ -170,7 +170,7 @@ def test_publicar_falha_nao_derruba_execucao(make_tipo, monkeypatch, tmp_path):
     video = tmp_path / "video_final.mp4"
     video.write_bytes(b"x")
 
-    import scripts.youtube as y
+    import publicacao.youtube as y
 
     def boom(*a, **k):
         raise RuntimeError("sem token")
@@ -203,7 +203,7 @@ def test_executar_com_captura_gera_publica_e_conclui(
 
     monkeypatch.setattr(execucoes, "gerar_video", fake_gerar)
 
-    import scripts.youtube as y
+    import publicacao.youtube as y
 
     monkeypatch.setattr(y, "publicar_video", lambda *a, **k: "https://youtu.be/ZZZ")
 

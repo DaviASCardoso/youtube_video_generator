@@ -3,8 +3,8 @@ import json
 import pytest
 
 from config.settings import Config
-from scripts import generate_script
-from scripts.generate_script import _parsear_prompts, _separar_periodos, gerar_roteiro
+from geracao import generate_script
+from geracao.generate_script import _parsear_prompts, _separar_periodos, gerar_roteiro
 
 
 def test_separar_periodos_junta_curtos():

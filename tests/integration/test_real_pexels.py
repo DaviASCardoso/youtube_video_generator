@@ -2,7 +2,7 @@
 
 import pytest
 
-from scripts import pexels
+from geracao import pexels
 
 pytestmark = pytest.mark.real_api
 

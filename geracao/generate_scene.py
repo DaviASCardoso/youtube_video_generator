@@ -11,8 +11,8 @@ editável no painel como os demais prompts.
 from pathlib import Path
 
 from config.settings import Config
-from scripts.compositor import EMOCAO_PADRAO, EMOCOES
-from scripts.generate_script import _chamar_api, _parsear_prompts, _separar_periodos
+from geracao.compositor import EMOCAO_PADRAO, EMOCOES
+from geracao.generate_script import _chamar_api, _parsear_prompts, _separar_periodos
 
 _EMOCOES_VALIDAS = set(EMOCOES)
 

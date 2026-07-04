@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from scripts import trends
-from scripts.trends import buscar_tendencias, tem_chave
+from descoberta import trends
+from descoberta.trends import buscar_tendencias, tem_chave
 
 
 class _RespostaFake:

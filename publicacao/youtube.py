@@ -9,8 +9,8 @@ projeto), então as credenciais são por tipo:
   tipos/<id>/youtube_token.json          (refresh token, criado no 1º
                                           consentimento; gitignored)
 
-Consentimento único:  python -m scripts.youtube auth --tipo <id>
-Teste manual:         python -m scripts.youtube publicar <video> --tipo <id> [--tema ...]
+Consentimento único:  python -m publicacao.youtube auth --tipo <id>
+Teste manual:         python -m publicacao.youtube publicar <video> --tipo <id> [--tema ...]
 
 Gotcha: em modo "Testing" do OAuth o refresh token expira em 7 dias (causa
 clássica de automação que "para sozinha"). Ponha o app em "In production" no
@@ -76,13 +76,13 @@ def autenticar(tipo: TipoVideo, permitir_consentimento: bool = False) -> Credent
             if not permitir_consentimento:
                 raise RuntimeError(
                     f"O token do YouTube de '{tipo.id}' expirou e não deu para "
-                    f"renovar ({e}). Rode: python -m scripts.youtube auth --tipo {tipo.id}"
+                    f"renovar ({e}). Rode: python -m publicacao.youtube auth --tipo {tipo.id}"
                 ) from e
 
     if not permitir_consentimento:
         raise RuntimeError(
             f"Sem credencial válida do YouTube para '{tipo.id}'. "
-            f"Rode: python -m scripts.youtube auth --tipo {tipo.id}"
+            f"Rode: python -m publicacao.youtube auth --tipo {tipo.id}"
         )
 
     client_secret = _caminho_client_secret(tipo)

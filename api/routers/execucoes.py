@@ -5,10 +5,10 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 
 from api.templating import templates
-from api import scheduler as scheduler_mod
+from operacoes import scheduler as scheduler_mod
 from config.tipos import carregar_tipo, listar_tipos
 from config.sistema import sistema
-from scripts.execucoes import historico, transmissor, ExecucaoEmAndamentoError
+from operacoes.execucoes import historico, transmissor, ExecucaoEmAndamentoError
 
 router = APIRouter(prefix="/execucoes", tags=["execucoes"])
 

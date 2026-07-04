@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import pytest
 
 from config.settings import Config
-from scripts import generate_image
-from scripts.generate_image import ASPECT_RATIOS, gerar_imagem
+from geracao import generate_image
+from geracao.generate_image import ASPECT_RATIOS, gerar_imagem
 
 
 def _config(tmp_path, aspect="9:16"):

@@ -1,6 +1,6 @@
 """Geração do roteiro + decisão de emoção e termo de busca por frase.
 
-Reaproveita as chamadas Groq já existentes (`scripts.generate_script`): a
+Reaproveita as chamadas Groq já existentes (`geracao.generate_script`): a
 primeira gera o texto do roteiro (mesmo system prompt/persona de sempre); a
 segunda, em vez de gerar prompts de imagem, decide para cada frase uma EMOÇÃO
 do personagem e um TERMO DE BUSCA em inglês para o fundo no Pexels.
@@ -9,7 +9,7 @@ do personagem e um TERMO DE BUSCA em inglês para o fundo no Pexels.
 from pathlib import Path
 
 from config.settings import Config
-from scripts.generate_script import _chamar_api, _parsear_prompts, _separar_periodos
+from geracao.generate_script import _chamar_api, _parsear_prompts, _separar_periodos
 
 from prototipo_personagem.compositor import EMOCAO_PADRAO, EMOCOES
 

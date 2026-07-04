@@ -3,8 +3,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import re
 
 from config.constantes import FEEDS_TRENDS, FREQUENCIAS, MODOS_IMAGEM, VISIBILIDADES
-from scripts.compositor import POSICOES
-from scripts.generate_image import ASPECT_RATIOS
+from geracao.compositor import POSICOES
+from geracao.generate_image import ASPECT_RATIOS
 
 _HORARIO_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _LOCALE_RE = re.compile(r"^[a-z]{2}-[A-Z]{2}$")

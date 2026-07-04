@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from scripts import pexels
-from scripts.pexels import buscar_imagem, tem_chave
+from geracao import pexels
+from geracao.pexels import buscar_imagem, tem_chave
 
 
 class _RespostaFake:

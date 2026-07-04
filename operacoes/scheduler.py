@@ -8,8 +8,8 @@ from apscheduler.jobstores.base import JobLookupError
 
 from config.tipos import TipoVideo, listar_tipos_ativos, carregar_tipo
 from config.sistema import sistema
-from scripts.execucoes import executar_com_captura, historico, ExecucaoEmAndamentoError
-from scripts.tendencias import coletar_temas_do_dia
+from operacoes.execucoes import executar_com_captura, historico, ExecucaoEmAndamentoError
+from descoberta.tendencias import coletar_temas_do_dia
 
 scheduler = BackgroundScheduler(
     executors={"default": ThreadPoolExecutor(max_workers=sistema.get("execucao.max_simultaneo"))}

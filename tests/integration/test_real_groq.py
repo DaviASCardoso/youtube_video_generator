@@ -2,7 +2,7 @@
 
 import pytest
 
-from scripts import generate_script
+from geracao import generate_script
 
 pytestmark = pytest.mark.real_api
 

@@ -1,7 +1,7 @@
 import pytest
 
-from scripts import tendencias
-from scripts.tendencias import (
+from descoberta import tendencias
+from descoberta.tendencias import (
     HistoricoTendencias,
     _default_prompt_tendencia,
     _escolher_tendencia,
@@ -9,7 +9,7 @@ from scripts.tendencias import (
     _prompt_do_tipo,
     coletar_temas_do_dia,
 )
-from scripts.gemini import TemaTendencia
+from descoberta.gemini import TemaTendencia
 
 
 # --- parte pura / armazenamento ---

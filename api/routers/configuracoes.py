@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import ValidationError
 
 from api.schemas import SistemaConfig
-from api import scheduler as scheduler_mod
+from operacoes import scheduler as scheduler_mod
 from api.templating import templates
 from config.constantes import FEEDS_TRENDS
 from config.sistema import sistema

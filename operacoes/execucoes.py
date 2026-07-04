@@ -8,7 +8,7 @@ import threading
 
 from config.tipos import TipoVideo
 from config.sistema import sistema
-from scripts.pipeline import gerar_video
+from geracao.pipeline import gerar_video
 
 _HISTORICO_PATH = Path(__file__).parent.parent / "execucoes" / "historico.json"
 
@@ -295,7 +295,7 @@ def _publicar_se_configurado(execucao_id: str, tema: str, tipo: TipoVideo, camin
         return
 
     # import tardio: só puxa as libs do Google quando realmente vai publicar
-    from scripts import youtube
+    from publicacao import youtube
 
     try:
         roteiro_path = Path(caminho_video).parent / "roteiro.txt"

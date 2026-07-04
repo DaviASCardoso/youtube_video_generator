@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 
 from api.templating import templates
 from config.tipos import carregar_tipo, TipoVideo
-from scripts.compositor import EMOCAO_PADRAO, EMOCOES, caminho_personagem
+from geracao.compositor import EMOCAO_PADRAO, EMOCOES, caminho_personagem
 
 router = APIRouter(prefix="/tipos/{id}/assets", tags=["assets"])
 

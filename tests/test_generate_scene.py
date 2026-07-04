@@ -3,8 +3,8 @@ import json
 import pytest
 
 from config.settings import Config
-from scripts import generate_scene
-from scripts.generate_scene import _normalizar, gerar_cenas
+from geracao import generate_scene
+from geracao.generate_scene import _normalizar, gerar_cenas
 
 
 def test_normalizar_emocao_valida():

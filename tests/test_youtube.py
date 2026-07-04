@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from config.settings import Config
-from scripts import youtube as y
+from publicacao import youtube as y
 
 
 def _config(youtube_extra=None):

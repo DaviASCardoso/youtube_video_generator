@@ -21,7 +21,7 @@ from moviepy import AudioFileClip, ImageClip, concatenate_videoclips
 
 from config.sistema import sistema
 from config.tipos import carregar_tipo
-from scripts.generate_voice import gerar_narracao
+from geracao.generate_voice import gerar_narracao
 
 from prototipo_personagem import pexels
 from prototipo_personagem.compositor import compor_cena

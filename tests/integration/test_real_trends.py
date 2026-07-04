@@ -2,7 +2,7 @@
 
 import pytest
 
-from scripts import trends
+from descoberta import trends
 
 pytestmark = pytest.mark.real_api
 

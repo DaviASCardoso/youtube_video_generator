@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import pytest
 
 from config.settings import Config
-from scripts import pipeline
-from scripts.pipeline import _modo_imagens, gerar_video
+from geracao import pipeline
+from geracao.pipeline import _modo_imagens, gerar_video
 
 
 def _tipo_com_modo(tmp_path, dados_imagens):

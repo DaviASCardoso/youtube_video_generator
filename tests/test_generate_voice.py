@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import pytest
 
 from config.settings import Config
-from scripts import generate_voice
-from scripts.generate_voice import _suporta_pitch, gerar_narracao
+from geracao import generate_voice
+from geracao.generate_voice import _suporta_pitch, gerar_narracao
 
 
 def _config(tmp_path, voz="v", pitch=0.0):

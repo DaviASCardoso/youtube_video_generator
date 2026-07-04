@@ -19,7 +19,7 @@ from pathlib import Path
 
 from config.sistema import sistema
 from config.tipos import listar_tipos_ativos
-from scripts import gemini, trends
+from descoberta import gemini, trends
 
 BASE = Path(__file__).parent
 _HISTORICO_PATH = BASE.parent / "tendencias" / "historico.json"

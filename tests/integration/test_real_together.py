@@ -8,7 +8,7 @@ import io
 import pytest
 from PIL import Image
 
-from scripts import generate_image
+from geracao import generate_image
 
 pytestmark = pytest.mark.real_api
 

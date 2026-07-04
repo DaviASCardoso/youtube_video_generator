@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from config.temas import FilaDeTemas
+from descoberta.temas import FilaDeTemas
 
 
 @pytest.fixture

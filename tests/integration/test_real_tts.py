@@ -2,7 +2,7 @@
 
 import pytest
 
-from scripts import generate_voice
+from geracao import generate_voice
 
 pytestmark = pytest.mark.real_api
 

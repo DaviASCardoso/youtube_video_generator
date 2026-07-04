@@ -5,7 +5,7 @@ import shutil
 import unicodedata
 
 from config.settings import Config
-from config.temas import FilaDeTemas
+from descoberta.temas import FilaDeTemas
 
 _TIPOS_DIR = Path(__file__).parent.parent / "tipos"
 

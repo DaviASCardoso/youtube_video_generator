@@ -2,8 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts import gemini
-from scripts.gemini import TemaTendencia, gerar_tema_de_tendencia
+from descoberta import gemini
+from descoberta.gemini import TemaTendencia, gerar_tema_de_tendencia
 
 
 def test_sem_chave_levanta_runtimeerror():

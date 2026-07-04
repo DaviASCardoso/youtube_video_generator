@@ -1,8 +1,8 @@
 import pytest
 
 from config.settings import Config
-from scripts import compositor
-from scripts.compositor import (
+from geracao import compositor
+from geracao.compositor import (
     EMOCAO_PADRAO,
     caminho_personagem,
     compor_cena,

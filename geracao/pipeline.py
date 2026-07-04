@@ -3,12 +3,12 @@ from moviepy import AudioFileClip, ImageClip, concatenate_videoclips
 
 from config.tipos import TipoVideo
 from config.sistema import sistema
-from scripts import pexels
-from scripts.compositor import compor_cena, validar_personagens
-from scripts.generate_scene import gerar_cenas
-from scripts.generate_script import gerar_roteiro
-from scripts.generate_image import gerar_imagem
-from scripts.generate_voice import gerar_narracao
+from geracao import pexels
+from geracao.compositor import compor_cena, validar_personagens
+from geracao.generate_scene import gerar_cenas
+from geracao.generate_script import gerar_roteiro
+from geracao.generate_image import gerar_imagem
+from geracao.generate_voice import gerar_narracao
 
 
 def _modo_imagens(tipo: TipoVideo) -> str:

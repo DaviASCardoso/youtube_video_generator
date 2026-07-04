@@ -2,8 +2,8 @@
 
 import pytest
 
-from scripts import gemini
-from scripts.gemini import TemaTendencia
+from descoberta import gemini
+from descoberta.gemini import TemaTendencia
 
 pytestmark = pytest.mark.real_api
 

@@ -4,7 +4,7 @@ from pydantic import ValidationError
 
 from api.schemas import TipoConfig
 from api.templating import templates
-from api import scheduler as scheduler_mod
+from operacoes import scheduler as scheduler_mod
 from config.constantes import FREQUENCIAS, MODOS_IMAGEM, VISIBILIDADES
 from config.tipos import (
     DEFAULT_CONFIG,
@@ -15,9 +15,9 @@ from config.tipos import (
     renomear_tipo,
     excluir_tipo,
 )
-from scripts.compositor import POSICOES
-from scripts.execucoes import historico
-from scripts.generate_image import ASPECT_RATIOS
+from geracao.compositor import POSICOES
+from operacoes.execucoes import historico
+from geracao.generate_image import ASPECT_RATIOS
 from api.routers.assets import contexto_prompts
 from api.routers.temas import contexto_temas
 

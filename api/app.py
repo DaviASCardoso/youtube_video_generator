@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from api import scheduler as scheduler_mod
+from operacoes import scheduler as scheduler_mod
 from api.auth import RequerLoginMiddleware, auth_ativo
 from api.routers import assets, auth, configuracoes, execucoes, temas, tipos
 from config.sistema import sistema
