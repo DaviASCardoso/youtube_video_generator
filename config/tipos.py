@@ -8,6 +8,7 @@ from config.settings import Config
 from descoberta.configuracao import DESCOBERTA_PADRAO
 from descoberta.temas import FilaDeTemas
 from geracao.configuracao import GERACAO_PADRAO
+from publicacao.configuracao import PUBLICACAO_PADRAO
 
 _TIPOS_DIR = Path(__file__).parent.parent / "tipos"
 
@@ -37,6 +38,7 @@ DEFAULT_CONFIG = {
     },
     "descoberta": DESCOBERTA_PADRAO,
     "geracao": GERACAO_PADRAO,
+    "publicacao": PUBLICACAO_PADRAO,
 }
 
 ASSETS_PADRAO = (

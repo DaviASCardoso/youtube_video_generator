@@ -150,5 +150,55 @@
     "checkpoint": {
       "reaproveitar": true
     }
+  },
+  "publicacao": {
+    "revisao": "auto",
+    "timing": {
+      "modo": "imediato",
+      "horario": "18:00",
+      "fuso_horario": "America/Sao_Paulo"
+    },
+    "visibilidade": {
+      "privacidade": "private",
+      "audiencia": "nao_infantil",
+      "disclosure_sintetico": true
+    },
+    "metadados": {
+      "tom": "",
+      "template_titulo": "",
+      "template_descricao": "",
+      "estrategia_tags": "mistas",
+      "max_tags": 15
+    },
+    "thumbnail": {
+      "ativo": false,
+      "fonte_fundo": "flux",
+      "texto": {
+        "fonte": "",
+        "tamanho": 96,
+        "cor": "#FFFFFF",
+        "posicao": "inferior",
+        "contorno_cor": "#000000",
+        "contorno_largura": 4
+      }
+    },
+    "quota": {
+      "cap_diario": 5,
+      "acao": "adiar"
+    },
+    "destinos": {
+      "youtube": {
+        "ativo": false,
+        "categoria_id": "22",
+        "idioma": "pt-BR",
+        "playlist": "",
+        "tags_base": [
+          "IA",
+          "inteligência artificial",
+          "automação"
+        ],
+        "descricao_base": ""
+      }
+    }
   }
 }

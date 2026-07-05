@@ -19,6 +19,15 @@ from geracao.configuracao import (
     PROVEDORES_VISUAIS,
 )
 from geracao.generate_image import ASPECT_RATIOS
+from publicacao.configuracao import (
+    ACOES_QUOTA,
+    AUDIENCIAS,
+    ESTRATEGIAS_TAGS,
+    FONTES_FUNDO_THUMB,
+    MODOS_REVISAO_PUB,
+    MODOS_TIMING,
+    POSICOES_TEXTO_THUMB,
+)
 
 _HORARIO_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _LOCALE_RE = re.compile(r"^[a-z]{2}-[A-Z]{2}$")
@@ -371,6 +380,141 @@ class GeracaoConfig(BaseModel):
     checkpoint: CheckpointConfig
 
 
+class TimingPublicacaoConfig(BaseModel):
+    modo: str
+    horario: str
+    fuso_horario: str
+
+    @field_validator("modo")
+    @classmethod
+    def _validar_modo(cls, v):
+        if v not in MODOS_TIMING:
+            raise ValueError(f"modo deve ser um de: {', '.join(MODOS_TIMING)}")
+        return v
+
+    @field_validator("horario")
+    @classmethod
+    def _validar_horario(cls, v):
+        if not _HORARIO_RE.match(v):
+            raise ValueError("horario deve estar no formato HH:MM (00:00–23:59)")
+        return v
+
+    @field_validator("fuso_horario")
+    @classmethod
+    def _validar_fuso(cls, v):
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError(f"fuso_horario inválido: {v}")
+        return v
+
+
+class VisibilidadePublicacaoConfig(BaseModel):
+    privacidade: str
+    audiencia: str
+    disclosure_sintetico: bool
+
+    @field_validator("privacidade")
+    @classmethod
+    def _validar_privacidade(cls, v):
+        if v not in VISIBILIDADES:
+            raise ValueError(f"privacidade deve ser uma de: {', '.join(VISIBILIDADES)}")
+        return v
+
+    @field_validator("audiencia")
+    @classmethod
+    def _validar_audiencia(cls, v):
+        if v not in AUDIENCIAS:
+            raise ValueError(f"audiencia deve ser uma de: {', '.join(AUDIENCIAS)}")
+        return v
+
+
+class MetadadosPublicacaoConfig(BaseModel):
+    tom: str = ""
+    template_titulo: str = ""
+    template_descricao: str = ""
+    estrategia_tags: str
+    max_tags: int = Field(ge=0, le=50)
+
+    @field_validator("estrategia_tags")
+    @classmethod
+    def _validar_estrategia(cls, v):
+        if v not in ESTRATEGIAS_TAGS:
+            raise ValueError(f"estrategia_tags deve ser uma de: {', '.join(ESTRATEGIAS_TAGS)}")
+        return v
+
+
+class TextoThumbnailConfig(BaseModel):
+    fonte: str = ""
+    tamanho: int = Field(ge=8, le=400)
+    cor: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    posicao: str
+    contorno_cor: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    contorno_largura: int = Field(ge=0, le=40)
+
+    @field_validator("posicao")
+    @classmethod
+    def _validar_posicao(cls, v):
+        if v not in POSICOES_TEXTO_THUMB:
+            raise ValueError(f"posicao deve ser uma de: {', '.join(POSICOES_TEXTO_THUMB)}")
+        return v
+
+
+class ThumbnailConfig(BaseModel):
+    ativo: bool
+    fonte_fundo: str
+    texto: TextoThumbnailConfig
+
+    @field_validator("fonte_fundo")
+    @classmethod
+    def _validar_fonte_fundo(cls, v):
+        if v not in FONTES_FUNDO_THUMB:
+            raise ValueError(f"fonte_fundo deve ser uma de: {', '.join(FONTES_FUNDO_THUMB)}")
+        return v
+
+
+class QuotaPublicacaoConfig(BaseModel):
+    cap_diario: int = Field(ge=0, le=1000)
+    acao: str
+
+    @field_validator("acao")
+    @classmethod
+    def _validar_acao(cls, v):
+        if v not in ACOES_QUOTA:
+            raise ValueError(f"acao deve ser uma de: {', '.join(ACOES_QUOTA)}")
+        return v
+
+
+class DestinoYoutubeConfig(BaseModel):
+    ativo: bool
+    categoria_id: str = Field(pattern=r"^\d+$")
+    idioma: str = Field(pattern=_LOCALE_RE.pattern)
+    playlist: str = ""
+    tags_base: list[str] = Field(default_factory=list)
+    descricao_base: str = ""
+
+
+class DestinosPublicacaoConfig(BaseModel):
+    youtube: DestinoYoutubeConfig
+
+
+class PublicacaoConfig(BaseModel):
+    revisao: str
+    timing: TimingPublicacaoConfig
+    visibilidade: VisibilidadePublicacaoConfig
+    metadados: MetadadosPublicacaoConfig
+    thumbnail: ThumbnailConfig
+    quota: QuotaPublicacaoConfig
+    destinos: DestinosPublicacaoConfig
+
+    @field_validator("revisao")
+    @classmethod
+    def _validar_revisao(cls, v):
+        if v not in MODOS_REVISAO_PUB:
+            raise ValueError(f"revisao deve ser um de: {', '.join(MODOS_REVISAO_PUB)}")
+        return v
+
+
 class TipoConfig(BaseModel):
     nome: str = Field(min_length=1)
     ativo: bool
@@ -383,6 +527,7 @@ class TipoConfig(BaseModel):
     youtube: YoutubeConfig
     descoberta: DescobertaConfig
     geracao: GeracaoConfig
+    publicacao: PublicacaoConfig
 
 
 class CriarTipoForm(BaseModel):

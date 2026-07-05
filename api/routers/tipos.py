@@ -6,6 +6,7 @@ from api.schemas import TipoConfig
 from api.templating import templates
 from descoberta.configuracao import mesclar_descoberta
 from geracao.configuracao import mesclar_geracao
+from publicacao.configuracao import mesclar_publicacao
 from operacoes import scheduler as scheduler_mod
 from config.constantes import FREQUENCIAS, MODOS_IMAGEM, VISIBILIDADES
 from config.tipos import (
@@ -234,6 +235,7 @@ def salvar_config(
     atual = tipo_atual.config.get_all()
     dados["descoberta"] = mesclar_descoberta(atual.get("descoberta"))
     dados["geracao"] = mesclar_geracao(atual.get("geracao"))
+    dados["publicacao"] = mesclar_publicacao(atual.get("publicacao"), atual.get("youtube"))
     contexto_base = {
         "request": request,
         "tipo": tipo_atual,

@@ -16,6 +16,7 @@ from PIL import Image
 
 from descoberta.configuracao import DESCOBERTA_PADRAO
 from geracao.configuracao import GERACAO_PADRAO
+from publicacao.configuracao import PUBLICACAO_PADRAO
 
 
 # --- Testes de API real (opt-in) -------------------------------------------
@@ -111,6 +112,7 @@ _CONFIG_TIPO_PADRAO = {
     },
     "descoberta": DESCOBERTA_PADRAO,
     "geracao": GERACAO_PADRAO,
+    "publicacao": PUBLICACAO_PADRAO,
 }
 
 
