@@ -24,7 +24,7 @@ from PIL import Image
 
 from config.sistema import sistema
 from config.tipos import TipoVideo
-from geracao import gates, sidecar
+from geracao import gates, legendas, sidecar
 from geracao.checkpoint import deve_reaproveitar
 from geracao.compositor import _fundo_placeholder, validar_personagens
 from geracao.configuracao import mesclar_geracao
@@ -261,10 +261,10 @@ def _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, led, reaproveitar):
 # --- estágio: montagem ----------------------------------------------------
 
 
-def _estagio_montagem(frases, base, pasta_audio, pasta_imagens) -> tuple[Path, float]:
+def _estagio_montagem(frases, base, pasta_audio, pasta_imagens, cfg_ger) -> tuple[Path, float]:
     print("\nMontando o vídeo final...")
-    clipes, duracao_total = [], 0.0
-    for indice, _ in frases:
+    clipes, itens, duracao_total = [], [], 0.0
+    for indice, frase in frases:
         audio = AudioFileClip(str(pasta_audio / f"frase_{indice}.mp3"))
         clipe = (
             ImageClip(str(pasta_imagens / f"imagem_{indice}.png"))
@@ -272,8 +272,14 @@ def _estagio_montagem(frases, base, pasta_audio, pasta_imagens) -> tuple[Path, f
             .with_audio(audio)
         )
         clipes.append(clipe)
+        itens.append((frase, audio.duration))
         duracao_total += audio.duration
         print(f"  cena {indice} montada ({audio.duration:.2f}s)")
+
+    if cfg_ger["legendas"]["ativo"]:
+        legendas.escrever_srt(base / "legendas.srt", itens)
+        clipes = legendas.sobrepor_legendas(clipes, itens, cfg_ger["legendas"])
+        print("  legendas aplicadas")
 
     video_final = concatenate_videoclips(clipes, method="compose")
     caminho_video = base / "video_final.mp4"
@@ -330,7 +336,7 @@ def gerar_video(
         frases, prov_visual, dados, tipo, pasta_imagens, cfg_ger, nome_visual, var, led, reaproveitar
     )
     _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, led, reaproveitar)
-    caminho_video, duracao = _estagio_montagem(frases, base, pasta_audio, pasta_imagens)
+    caminho_video, duracao = _estagio_montagem(frases, base, pasta_audio, pasta_imagens, cfg_ger)
 
     sidecar.escrever(base, sidecar.montar(tema, frases, duracao, led))
     gasto_diario.registrar(led.total())

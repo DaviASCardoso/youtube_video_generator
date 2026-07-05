@@ -269,6 +269,15 @@ def test_visual_falha_cai_para_placeholder(tmp_path, sistema_temp, make_tipo, am
     assert led.provedores()["visuais"] == "placeholder"
 
 
+def test_legendas_ativas_escrevem_srt(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    ger = _tipo_geracao(legendas={"ativo": True, "tamanho": 48, "cor": "#FFFFFF", "posicao": "inferior"})
+    tipo = make_tipo(config_extra={"imagens": {"modo": "ia"}, "geracao": ger})
+    _instalar_provedores(monkeypatch, visuais=_FakeVisuaisFlux())
+
+    gerar_video("tema", tipo, tmp_path / "out")
+    assert (tmp_path / "out" / "legendas.srt").exists()
+
+
 def test_narracao_cai_para_voz_secundaria(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
     ger = _tipo_geracao(narracao={"provedor": "google", "voz_secundaria": "voz_b"})
     tipo = make_tipo(config_extra={"imagens": {"modo": "ia"}, "geracao": ger})
