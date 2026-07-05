@@ -1,14 +1,55 @@
-from pathlib import Path
-from moviepy import AudioFileClip, ImageClip, concatenate_videoclips
+"""Pipeline de geração em estágios, checkpointado e dirigido por config.
 
-from config.tipos import TipoVideo
+`gerar_video` executa estágios explícitos — roteiro → plano visual → visuais →
+narração → montagem — e cada um:
+
+- **reaproveita** o artefato se ele já existe e valida (checkpoint/resumabilidade);
+- passa por um **gate** de qualidade antes de o próximo estágio gastar;
+- roda atrás de um **contrato de provedor** (selecionado por `geracao.*.provedor`);
+- **registra o custo** num `Ledger` e respeita o **orçamento** (degradar/parar);
+- **degrada em vez de quebrar** (retry+backoff, provedor de fallback, placeholder).
+
+Ao final, escreve o `video_final.mp4` **e** um `sidecar.json` (tema/roteiro/duração/
+provedores/custos) que a Publicação consome. Sob a config default, os provedores
+chamam exatamente as funções de sempre, na mesma ordem — a saída fica equivalente à
+de hoje (a variação atua só no texto do prompt).
+"""
+
+import re
+import time
+from pathlib import Path
+
+from moviepy import AudioFileClip, ImageClip, concatenate_videoclips
+from PIL import Image
+
 from config.sistema import sistema
-from geracao import pexels
-from geracao.compositor import compor_cena, validar_personagens
-from geracao.generate_scene import gerar_cenas
-from geracao.generate_script import gerar_roteiro
-from geracao.generate_image import gerar_imagem
-from geracao.generate_voice import gerar_narracao
+from config.tipos import TipoVideo
+from geracao import gates, sidecar
+from geracao.checkpoint import deve_reaproveitar
+from geracao.compositor import _fundo_placeholder, validar_personagens
+from geracao.configuracao import mesclar_geracao
+from geracao.custo import (
+    CUSTO_FLUX_IMAGEM,
+    CUSTO_PEXELS,
+    Ledger,
+    checar_orcamento,
+    gasto_diario,
+)
+from geracao.generate_image import ASPECT_RATIOS
+from geracao.generate_voice import gerar_narracao  # noqa: F401 (mantido p/ compat de testes)
+from geracao.provedores import base as provedores
+from geracao.variacao import Variacao
+
+# Backoff entre tentativas (segundos, base do crescimento exponencial). Os provedores
+# mockados dos testes acertam na 1ª tentativa, então o sleep nunca é exercido lá.
+ESPERA_BACKOFF = 2.0
+TENTATIVAS = 3
+
+_CUSTO_PREVISTO_VISUAL = {"flux": CUSTO_FLUX_IMAGEM, "pexels": CUSTO_PEXELS, "placeholder": 0.0}
+
+
+class OrcamentoExcedido(Exception):
+    """Um estágio pago estouraria o orçamento configurado (ação 'parar')."""
 
 
 def _modo_imagens(tipo: TipoVideo) -> str:
@@ -23,124 +64,216 @@ def _modo_imagens(tipo: TipoVideo) -> str:
         return "ia"
 
 
-def _gerar_cenas_ia(
-    tema: str, tipo: TipoVideo, base: Path, pasta_imagens: Path
-) -> list[tuple[int, str]]:
-    """Modo original: roteiro -> prompts de imagem -> imagens por IA (Together)."""
-    print("Gerando roteiro...")
-    frases_roteiro, prompts_imagens = gerar_roteiro(
-        f"Gere um roteiro sobre {tema}", tipo.config, tipo.assets_dir
+def _tentar(fn, tentativas: int = TENTATIVAS):
+    """Executa `fn` com retry + backoff exponencial; re-levanta o último erro."""
+    ultimo = None
+    for i in range(tentativas):
+        try:
+            return fn()
+        except Exception as e:  # noqa: BLE001 (resiliência deliberada por estágio)
+            ultimo = e
+            if i < tentativas - 1 and ESPERA_BACKOFF:
+                time.sleep(ESPERA_BACKOFF * (2**i))
+    raise ultimo
+
+
+# --- estágio: roteiro -----------------------------------------------------
+
+
+def _ler_roteiro(caminho: Path) -> list[tuple[int, str]]:
+    linhas = [l for l in caminho.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return [(i + 1, l) for i, l in enumerate(linhas)]
+
+
+def _escrever_roteiro(caminho: Path, frases: list) -> None:
+    caminho.write_text("\n".join(str(f[1]) for f in frases), encoding="utf-8")
+
+
+def _estagio_roteiro(tema, tipo, base, cfg_ger, var, led, reaproveitar):
+    caminho = base / "roteiro.txt"
+    if deve_reaproveitar(caminho, reaproveitar):
+        print(f"Reaproveitando roteiro de {caminho}")
+        frases = _ler_roteiro(caminho)
+    else:
+        print("Gerando roteiro...")
+        prov = provedores.obter(provedores.PAPEL_ROTEIRO, cfg_ger["roteiro"]["provedor"])
+        frases = _tentar(
+            lambda: prov.gerar(tema, tipo.config, tipo.assets_dir, variacao=var, ledger=led)
+        )
+        _escrever_roteiro(caminho, frases)
+        print(f"Roteiro salvo em: {caminho}")
+    gates.validar_roteiro(frases, cfg_ger)
+    return frases
+
+
+# --- estágio: plano visual ------------------------------------------------
+
+
+def _escrever_prompts(caminho: Path, dados: list) -> None:
+    caminho.write_text("\n".join(str(p) for p in dados), encoding="utf-8")
+
+
+def _ler_prompts(caminho: Path) -> list[str]:
+    return [l for l in caminho.read_text(encoding="utf-8").splitlines() if l.strip()]
+
+
+_RE_CENA = re.compile(r"^\[(?P<emocao>.*?)\]\s*\((?P<busca>.*)\)$")
+
+
+def _escrever_cenas(caminho: Path, dados: list) -> None:
+    caminho.write_text(
+        "\n".join(f"[{d['emocao']}] ({d['busca']})" for d in dados), encoding="utf-8"
     )
 
-    (base / "roteiro.txt").write_text(
-        "\n".join(f[1] for f in frases_roteiro), encoding="utf-8"
-    )
-    print(f"Roteiro salvo em: {base / 'roteiro.txt'}")
 
-    (base / "prompts.txt").write_text(
-        "\n".join(p[1] for p in prompts_imagens), encoding="utf-8"
-    )
-    print(f"Prompts salvos em: {base / 'prompts.txt'}")
-
-    print("\nGerando imagens...")
-    referencia = tipo.assets_dir / "imagem_referencia.png"
-    ref_arg = str(referencia) if referencia.exists() else None
-
-    for i, (_, prompt) in enumerate(prompts_imagens, start=1):
-        imagem = gerar_imagem(prompt, tipo.config, tipo.assets_dir, referencia=ref_arg)
-        (pasta_imagens / f"imagem_{i}.png").write_bytes(imagem)
-        print(f"  Imagem {i}/{len(prompts_imagens)} gerada.")
-
-    return frases_roteiro
-
-
-def _gerar_cenas_personagem(
-    tema: str, tipo: TipoVideo, base: Path, pasta_imagens: Path
-) -> list[tuple[int, str]]:
-    """Modo "personagem": roteiro -> emoção + busca por frase -> foto do Pexels
-    de fundo com o PNG do personagem por cima."""
-    validar_personagens(tipo.assets_dir)
-
-    print("Gerando roteiro e definindo emoção + busca por frase...")
-    cenas = gerar_cenas(f"Gere um roteiro sobre {tema}", tipo.config, tipo.assets_dir)
-
-    (base / "roteiro.txt").write_text(
-        "\n".join(frase for _, frase, _, _ in cenas), encoding="utf-8"
-    )
-    print(f"Roteiro salvo em: {base / 'roteiro.txt'}")
-
-    (base / "cenas.txt").write_text(
-        "\n".join(f"[{emocao}] ({busca})" for _, _, emocao, busca in cenas),
-        encoding="utf-8",
-    )
-    print(f"Cenas (emoção + busca) salvas em: {base / 'cenas.txt'}")
-
-    if not pexels.tem_chave():
-        print("AVISO: PEXELS_API_KEY não configurada — usando fundos de placeholder.")
-
-    orientacao = (
-        "portrait"
-        if tipo.config.get("imagens.altura") > tipo.config.get("imagens.largura")
-        else "landscape"
-    )
-
-    print("\nMontando cenas (fundo + personagem)...")
-    usados: dict[str, int] = {}  # varia o fundo quando o mesmo termo se repete
-    for indice, _, emocao, busca in cenas:
+def _ler_cenas(caminho: Path) -> list[dict]:
+    dados, usados = [], {}
+    for linha in caminho.read_text(encoding="utf-8").splitlines():
+        if not linha.strip():
+            continue
+        m = _RE_CENA.match(linha.strip())
+        emocao = m.group("emocao") if m else "neutro"
+        busca = (m.group("busca") if m else "abstract background") or "abstract background"
         i_fundo = usados.get(busca, 0)
         usados[busca] = i_fundo + 1
-        fundo_bytes = pexels.buscar_imagem(busca, orientacao=orientacao, indice=i_fundo)
-        quadro = compor_cena(fundo_bytes, emocao, tipo.config, tipo.assets_dir, indice=indice)
-        quadro.save(pasta_imagens / f"imagem_{indice}.png")
-        origem = "pexels" if fundo_bytes else "placeholder"
-        print(f"  Cena {indice}/{len(cenas)} [{emocao}] fundo={origem} ({busca})")
-
-    return [(indice, frase) for indice, frase, _, _ in cenas]
+        dados.append({"emocao": emocao, "busca": busca, "i_fundo": i_fundo})
+    return dados
 
 
-def gerar_video(tema: str, tipo: TipoVideo, output_path: str | Path) -> Path:
-    """Executa o pipeline completo de geração de vídeo.
-
-    Args:
-        tema: Tema do vídeo a ser gerado.
-        tipo: Tipo de vídeo (configuração, prompts e assets) a usar na geração.
-        output_path: Pasta onde os arquivos intermediários e o vídeo final serão salvos.
-
-    Returns:
-        Path do vídeo final gerado.
-    """
-    base = Path(output_path)
-    pasta_audio = base / "audio"
-    pasta_imagens = base / "images"
-
-    for pasta in (base, pasta_audio, pasta_imagens):
-        pasta.mkdir(parents=True, exist_ok=True)
-
-    # Etapas 1 e 2: roteiro + imagens, conforme o modo do tipo
-    if _modo_imagens(tipo) == "personagem":
-        frases_roteiro = _gerar_cenas_personagem(tema, tipo, base, pasta_imagens)
+def _estagio_plano_visual(frases, tipo, base, cfg_ger, nome_visual, var, led, reaproveitar):
+    prov = provedores.obter(provedores.PAPEL_VISUAIS, nome_visual)
+    if nome_visual == "pexels":
+        caminho = base / "cenas.txt"
+        ler, escrever = _ler_cenas, _escrever_cenas
     else:
-        frases_roteiro = _gerar_cenas_ia(tema, tipo, base, pasta_imagens)
+        caminho = base / "prompts.txt"
+        ler, escrever = _ler_prompts, _escrever_prompts
 
-    # Etapa 3: narração
+    if deve_reaproveitar(caminho, reaproveitar):
+        print(f"Reaproveitando plano visual de {caminho}")
+        dados = ler(caminho)
+    else:
+        print("Planejando visuais...")
+        dados = _tentar(
+            lambda: prov.planejar(frases, tipo.config, tipo.assets_dir, variacao=var, ledger=led)
+        )
+        escrever(caminho, dados)
+        print(f"Plano visual salvo em: {caminho}")
+
+    gates.validar_plano_visual(frases, dados)
+    return prov, dados
+
+
+# --- estágio: visuais (render por cena) -----------------------------------
+
+
+def _tamanho_canvas(tipo, nome_visual) -> tuple[int, int]:
+    if nome_visual == "pexels":
+        return tipo.config.get("imagens.largura"), tipo.config.get("imagens.altura")
+    return ASPECT_RATIOS[tipo.config.get("together.aspect_ratio")]
+
+
+def _placeholder(indice, tipo, nome_visual) -> Image.Image:
+    largura, altura = _tamanho_canvas(tipo, nome_visual)
+    return _fundo_placeholder(indice, largura, altura)
+
+
+def _salvar_imagem(caminho: Path, imagem) -> None:
+    if isinstance(imagem, (bytes, bytearray)):
+        caminho.write_bytes(imagem)
+    else:  # PIL.Image
+        imagem.save(caminho)
+
+
+def _render_resiliente(prov, indice, dado, tipo, nome_visual, var, led, degradar):
+    if degradar:
+        print(f"  cena {indice}: orçamento apertado — usando placeholder")
+        led.registrar("visuais", "placeholder", 0.0)
+        return _placeholder(indice, tipo, nome_visual)
+    try:
+        return _tentar(
+            lambda: prov.renderizar(
+                indice, dado, tipo.config, tipo.assets_dir, variacao=var, ledger=led
+            )
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"  cena {indice}: visual falhou ({e}) — caindo para placeholder")
+        led.registrar("visuais", "placeholder", 0.0)
+        return _placeholder(indice, tipo, nome_visual)
+
+
+def _estagio_visuais(frases, prov, dados, tipo, pasta_imagens, cfg_ger, nome_visual, var, led, reaproveitar):
+    previsto = _CUSTO_PREVISTO_VISUAL.get(nome_visual, 0.0)
+    print("\nGerando visuais...")
+    for (indice, _), dado in zip(frases, dados):
+        caminho = pasta_imagens / f"imagem_{indice}.png"
+        if deve_reaproveitar(caminho, reaproveitar):
+            print(f"  cena {indice}: reaproveitada")
+            continue
+        decisao = checar_orcamento(
+            led.total(), previsto, gasto_diario.gasto_hoje(), cfg_ger["orcamento"]
+        )
+        if decisao == "parar":
+            raise OrcamentoExcedido(
+                f"cena {indice}: orçamento excedido (ação 'parar')"
+            )
+        imagem = _render_resiliente(
+            prov, indice, dado, tipo, nome_visual, var, led, degradar=(decisao == "degradar")
+        )
+        _salvar_imagem(caminho, imagem)
+        print(f"  cena {indice}/{len(frases)} pronta")
+
+    caminhos = [pasta_imagens / f"imagem_{i}.png" for i, _ in frases]
+    gates.validar_visuais(caminhos, esperado=len(frases))
+
+
+# --- estágio: narração ----------------------------------------------------
+
+
+def _narrar_resiliente(prov, texto, caminho, tipo, cfg_ger, led):
+    try:
+        return _tentar(lambda: prov.narrar(texto, caminho, tipo.config, ledger=led))
+    except Exception as e:  # noqa: BLE001
+        voz_sec = cfg_ger["narracao"].get("voz_secundaria") or None
+        if voz_sec:
+            print(f"  narração falhou ({e}) — tentando voz secundária '{voz_sec}'")
+            return _tentar(
+                lambda: prov.narrar(texto, caminho, tipo.config, voz=voz_sec, ledger=led)
+            )
+        raise
+
+
+def _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, led, reaproveitar):
+    prov = provedores.obter(provedores.PAPEL_NARRACAO, cfg_ger["narracao"]["provedor"])
     print("\nGerando narrações...")
-    for i, (_, frase) in enumerate(frases_roteiro, start=1):
-        gerar_narracao(frase, pasta_audio / f"frase_{i}.mp3", tipo.config)
-        print(f"  Narração {i}/{len(frases_roteiro)} gerada.")
+    for indice, frase in frases:
+        caminho = pasta_audio / f"frase_{indice}.mp3"
+        if deve_reaproveitar(
+            caminho, reaproveitar, validar=lambda p: p.stat().st_size >= 512
+        ):
+            print(f"  narração {indice}: reaproveitada")
+            continue
+        _narrar_resiliente(prov, frase, caminho, tipo, cfg_ger, led)
+        gates.validar_narracao(caminho)
+        print(f"  narração {indice}/{len(frases)} gerada")
 
-    # Etapa 4: montagem
+
+# --- estágio: montagem ----------------------------------------------------
+
+
+def _estagio_montagem(frases, base, pasta_audio, pasta_imagens) -> tuple[Path, float]:
     print("\nMontando o vídeo final...")
-    clipes = []
-
-    for i, (_, frase) in enumerate(frases_roteiro, start=1):
-        audio = AudioFileClip(str(pasta_audio / f"frase_{i}.mp3"))
+    clipes, duracao_total = [], 0.0
+    for indice, _ in frases:
+        audio = AudioFileClip(str(pasta_audio / f"frase_{indice}.mp3"))
         clipe = (
-            ImageClip(str(pasta_imagens / f"imagem_{i}.png"))
+            ImageClip(str(pasta_imagens / f"imagem_{indice}.png"))
             .with_duration(audio.duration)
             .with_audio(audio)
         )
         clipes.append(clipe)
-        print(f"  Cena {i} montada ({audio.duration:.2f}s)")
+        duracao_total += audio.duration
+        print(f"  cena {indice} montada ({audio.duration:.2f}s)")
 
     video_final = concatenate_videoclips(clipes, method="compose")
     caminho_video = base / "video_final.mp4"
@@ -150,6 +283,57 @@ def gerar_video(tema: str, tipo: TipoVideo, output_path: str | Path) -> Path:
         codec=sistema.get("video.codec"),
         audio_codec=sistema.get("video.audio_codec"),
     )
+    return caminho_video, duracao_total
+
+
+# --- orquestração ---------------------------------------------------------
+
+
+def gerar_video(
+    tema: str, tipo: TipoVideo, output_path: str | Path, ledger: Ledger | None = None
+) -> Path:
+    """Executa o pipeline em estágios, checkpointado, e grava vídeo + sidecar.
+
+    Args:
+        tema: Tema do vídeo a ser gerado.
+        tipo: Tipo de vídeo (configuração, prompts e assets) a usar na geração.
+        output_path: Pasta do run (artefatos intermediários, vídeo e sidecar).
+        ledger: Ledger de custo opcional (o histórico injeta o seu; senão cria um).
+
+    Returns:
+        Path do vídeo final gerado.
+    """
+    base = Path(output_path)
+    pasta_audio = base / "audio"
+    pasta_imagens = base / "images"
+    for pasta in (base, pasta_audio, pasta_imagens):
+        pasta.mkdir(parents=True, exist_ok=True)
+
+    cfg_ger = mesclar_geracao(tipo.config.get_all().get("geracao"))
+    led = ledger if ledger is not None else Ledger()
+    var = Variacao(cfg_ger["variacao"])
+    reaproveitar = cfg_ger["checkpoint"]["reaproveitar"]
+
+    modo = _modo_imagens(tipo)
+    nome_visual = cfg_ger["visuais"]["provedor"]
+    if nome_visual == "auto":
+        nome_visual = provedores.provedor_visuais_para_modo(modo)
+    if nome_visual == "pexels":
+        validar_personagens(tipo.assets_dir)  # fail-fast antes de gastar
+
+    # Estágios explícitos, cada um checkpointado + com gate de saída.
+    frases = _estagio_roteiro(tema, tipo, base, cfg_ger, var, led, reaproveitar)
+    prov_visual, dados = _estagio_plano_visual(
+        frases, tipo, base, cfg_ger, nome_visual, var, led, reaproveitar
+    )
+    _estagio_visuais(
+        frases, prov_visual, dados, tipo, pasta_imagens, cfg_ger, nome_visual, var, led, reaproveitar
+    )
+    _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, led, reaproveitar)
+    caminho_video, duracao = _estagio_montagem(frases, base, pasta_audio, pasta_imagens)
+
+    sidecar.escrever(base, sidecar.montar(tema, frases, duracao, led))
+    gasto_diario.registrar(led.total())
 
     print(f"\nVídeo gerado com sucesso: {caminho_video}")
     return caminho_video
