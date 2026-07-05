@@ -11,7 +11,12 @@ from config.sistema import sistema
 from descoberta import estado
 from descoberta.configuracao import mesclar_descoberta
 from descoberta.descoberta import decidir_tema
-from operacoes.execucoes import executar_com_captura, historico, ExecucaoEmAndamentoError
+from operacoes.execucoes import (
+    ExecucaoEmAndamentoError,
+    executar_com_captura,
+    historico,
+    pasta_da_execucao,
+)
 
 scheduler = BackgroundScheduler(
     executors={"default": ThreadPoolExecutor(max_workers=sistema.get("execucao.max_simultaneo"))}
@@ -118,9 +123,9 @@ def _job_descoberta(tipo_id: str) -> None:
         print(f"[{tipo.nome}] Falha na descoberta: {e}")
 
 
-def _job_reservado(tipo_id: str, tema: str, execucao: dict) -> None:
+def _job_reservado(tipo_id: str, tema: str, execucao: dict, output_path=None) -> None:
     tipo = carregar_tipo(tipo_id)
-    executar_com_captura(tema, tipo, execucao=execucao)
+    executar_com_captura(tema, tipo, execucao=execucao, output_path=output_path)
 
 
 def registrar_job(tipo: TipoVideo) -> None:
@@ -220,6 +225,32 @@ def disparar_agora(tipo: TipoVideo, tema: str | None = None) -> dict:
         run_date=datetime.now(),
         args=[tipo.id, tema_final, execucao],
         id=f"manual-{execucao['id']}",
+    )
+    return execucao
+
+
+def reexecutar_agora(execucao_id: str) -> dict:
+    """Reexecuta uma execução antiga reaproveitando a pasta do run (checkpoint):
+    os estágios que já produziram artefato válido são pulados, e a geração retoma
+    de onde parou. Roda no mesmo executor/teto de concorrência dos demais.
+
+    Raises:
+        ValueError: Se a execução original não tem uma pasta de run localizável.
+        ExecucaoEmAndamentoError: Se já existe uma execução em andamento para o tipo.
+    """
+    registro = historico.obter(execucao_id)
+    pasta = pasta_da_execucao(registro)
+    if pasta is None:
+        raise ValueError("Execução original não tem pasta de run para reaproveitar.")
+
+    tipo = carregar_tipo(registro["tipo_id"])
+    execucao = historico.iniciar(tipo.id, tipo.nome, registro["tema"])
+    scheduler.add_job(
+        _job_reservado,
+        trigger="date",
+        run_date=datetime.now(),
+        args=[tipo.id, registro["tema"], execucao, str(pasta)],
+        id=f"reexec-{execucao['id']}",
     )
     return execucao
 

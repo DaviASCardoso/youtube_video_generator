@@ -137,3 +137,37 @@ def test_disparar_nada_encontrado_erra(make_tipo, sem_efeitos, monkeypatch):
     monkeypatch.setattr(sched, "decidir_tema", lambda tipo: None)
     with pytest.raises(ValueError):
         sched.disparar_agora(tipo)
+
+
+# --- reexecutar_agora ---
+
+def test_reexecutar_agora_reserva_com_pasta(make_tipo, monkeypatch):
+    tipo = make_tipo()
+    registro = {
+        "id": "velho",
+        "tipo_id": tipo.id,
+        "tema": "Tema Antigo",
+        "output_path": "output/x/2026/video_final.mp4",
+        "log_path": None,
+    }
+    monkeypatch.setattr(sched.historico, "obter", lambda eid: registro)
+    monkeypatch.setattr(
+        sched.historico, "iniciar", lambda tid, tn, tema: {"id": "novo", "tema": tema}
+    )
+    capturado = {}
+    monkeypatch.setattr(sched.scheduler, "add_job", lambda *a, **k: capturado.update(kwargs=k))
+
+    ex = sched.reexecutar_agora("velho")
+    assert ex["tema"] == "Tema Antigo"
+    # a pasta do run antigo (pai do video_final.mp4) é passada ao job reservado
+    from pathlib import Path
+
+    assert Path(capturado["kwargs"]["args"][-1]) == Path("output/x/2026")
+
+
+def test_reexecutar_agora_sem_pasta_erra(make_tipo, monkeypatch):
+    tipo = make_tipo()
+    registro = {"id": "v", "tipo_id": tipo.id, "tema": "t", "output_path": None, "log_path": None}
+    monkeypatch.setattr(sched.historico, "obter", lambda eid: registro)
+    with pytest.raises(ValueError):
+        sched.reexecutar_agora("v")

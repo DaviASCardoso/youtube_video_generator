@@ -219,6 +219,42 @@ def test_executar_com_captura_gera_publica_e_conclui(
     assert reg["provedores"] == {"roteiro": "groq"}
 
 
+def test_pasta_da_execucao_do_output_path():
+    reg = {"output_path": "output/tipo/2026/video_final.mp4", "log_path": None}
+    assert execucoes.pasta_da_execucao(reg).as_posix() == "output/tipo/2026"
+
+
+def test_pasta_da_execucao_cai_no_log(tmp_path):
+    reg = {"output_path": None, "log_path": "output/tipo/2026/execucao.log"}
+    assert execucoes.pasta_da_execucao(reg).as_posix() == "output/tipo/2026"
+
+
+def test_pasta_da_execucao_sem_nada():
+    assert execucoes.pasta_da_execucao({"output_path": None, "log_path": None}) is None
+
+
+def test_executar_reaproveita_pasta_dada(make_tipo, monkeypatch, tmp_path, sistema_temp):
+    from pathlib import Path
+
+    tipo = make_tipo(config_extra=_youtube_cfg(publicar=False))
+    hist = HistoricoExecucoes(tmp_path / "h.json")
+    monkeypatch.setattr(execucoes, "historico", hist)
+
+    recebido = {}
+
+    def fake_gerar(tema, tipo, output_path, ledger=None):
+        recebido["output_path"] = Path(output_path)
+        Path(output_path).mkdir(parents=True, exist_ok=True)
+        video = Path(output_path) / "video_final.mp4"
+        video.write_bytes(b"x")
+        return video
+
+    monkeypatch.setattr(execucoes, "gerar_video", fake_gerar)
+    pasta = tmp_path / "run_antigo"
+    execucoes.executar_com_captura("tema", tipo, output_path=pasta)
+    assert recebido["output_path"] == pasta  # reusou a pasta, não gerou timestamp
+
+
 def test_iniciar_inclui_campos_de_custo(hist):
     reg = hist.iniciar("canal", "Canal X", "t")
     assert reg["custo_total"] is None

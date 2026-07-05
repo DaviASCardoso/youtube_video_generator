@@ -11,7 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from operacoes import scheduler as scheduler_mod
 from api.auth import RequerLoginMiddleware, auth_ativo
-from api.routers import assets, auth, configuracoes, descoberta, execucoes, temas, tipos
+from api.routers import assets, auth, configuracoes, descoberta, execucoes, geracao, temas, tipos
 from config.sistema import sistema
 
 BASE = Path(__file__).parent
@@ -76,6 +76,7 @@ app.include_router(configuracoes.router)
 app.include_router(tipos.router)
 app.include_router(assets.router)
 app.include_router(descoberta.router)
+app.include_router(geracao.router)
 app.include_router(temas.router)
 app.include_router(execucoes.router)
 

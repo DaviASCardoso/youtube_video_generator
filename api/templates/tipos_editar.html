@@ -20,6 +20,7 @@
     <button type="button" :class="{ ativa: aba === 'config' }" @click="aba = 'config'">Configuração</button>
     <button type="button" :class="{ ativa: aba === 'prompts' }" @click="aba = 'prompts'">Prompts</button>
     <button type="button" :class="{ ativa: aba === 'descoberta' }" @click="aba = 'descoberta'">Descoberta</button>
+    <button type="button" :class="{ ativa: aba === 'geracao' }" @click="aba = 'geracao'">Geração</button>
     <button type="button" :class="{ ativa: aba === 'temas' }" @click="aba = 'temas'">Ideias</button>
   </div>
 
@@ -31,6 +32,9 @@
   </div>
   <div x-show="aba === 'descoberta'" id="descoberta-tab">
     {% include "_tipos_descoberta_tab.html" %}
+  </div>
+  <div x-show="aba === 'geracao'" id="geracao-tab">
+    {% include "_tipos_geracao_tab.html" %}
   </div>
   <div x-show="aba === 'temas'" id="temas-tab">
     {% include "_tipos_temas_tab.html" %}

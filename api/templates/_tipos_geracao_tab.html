@@ -1,0 +1,136 @@
+{% if sucesso %}
+<div class="aviso sucesso">Configuração de geração salva com sucesso.</div>
+{% endif %}
+{% if erro %}
+<div class="aviso erro">{{ erro }}</div>
+{% endif %}
+
+<form hx-post="/tipos/{{ tipo.id }}/geracao" hx-target="#geracao-tab" hx-swap="innerHTML">
+  <fieldset>
+    <legend>Roteiro</legend>
+    <label><span class="rotulo">Provedor</span>
+      <select name="roteiro_provedor" required>
+        {% for o in provedores_roteiro %}<option value="{{ o }}" {% if g.roteiro.provedor == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+    <label><span class="rotulo">Duração-alvo (segundos, 5–3600)</span>
+      <input type="number" min="5" max="3600" name="roteiro_duracao_alvo_seg" value="{{ g.roteiro.duracao_alvo_seg }}" required></label>
+    <label><span class="rotulo">Tom (opcional — vazio mantém a persona do prompt)</span>
+      <input type="text" name="roteiro_tom" value="{{ g.roteiro.tom }}"></label>
+    <label><span class="rotulo">Mín. de palavras do roteiro (0 = sem mínimo)</span>
+      <input type="number" min="0" name="roteiro_min_palavras" value="{{ g.roteiro.min_palavras }}" required></label>
+    <label><span class="rotulo">Máx. de palavras do roteiro</span>
+      <input type="number" min="1" name="roteiro_max_palavras" value="{{ g.roteiro.max_palavras }}" required></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Visuais</legend>
+    <label><span class="rotulo">Provedor (auto deriva do modo de imagens)</span>
+      <select name="visuais_provedor" required>
+        {% for o in provedores_visuais %}<option value="{{ o }}" {% if g.visuais.provedor == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+    <label><span class="rotulo">Imagens por cena (1–10)</span>
+      <input type="number" min="1" max="10" name="visuais_imagens_por_cena" value="{{ g.visuais.imagens_por_cena }}" required></label>
+    <label><span class="rotulo">Fallback quando o visual falha</span>
+      <select name="visuais_fallback" required>
+        {% for o in fallbacks_visuais %}<option value="{{ o }}" {% if g.visuais.fallback == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Narração</legend>
+    <label><span class="rotulo">Provedor</span>
+      <select name="narracao_provedor" required>
+        {% for o in provedores_narracao %}<option value="{{ o }}" {% if g.narracao.provedor == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+    <label><span class="rotulo">Voz secundária (fallback — vazio desativa)</span>
+      <input type="text" name="narracao_voz_secundaria" value="{{ g.narracao.voz_secundaria }}"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Legendas</legend>
+    <label><input type="checkbox" name="legendas_ativo" {% if g.legendas.ativo %}checked{% endif %}
+           style="width:auto; display:inline-block; margin-right:0.4rem"> Queimar legendas no vídeo</label>
+    <label><span class="rotulo">Tamanho da fonte (8–200)</span>
+      <input type="number" min="8" max="200" name="legendas_tamanho" value="{{ g.legendas.tamanho }}" required></label>
+    <label><span class="rotulo">Cor (hex, ex: #FFFFFF)</span>
+      <input type="text" name="legendas_cor" value="{{ g.legendas.cor }}" required></label>
+    <label><span class="rotulo">Posição</span>
+      <select name="legendas_posicao" required>
+        {% for o in posicoes_legenda %}<option value="{{ o }}" {% if g.legendas.posicao == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Montagem</legend>
+    <label><input type="checkbox" name="musica_ativo" {% if g.montagem.musica_fundo.ativo %}checked{% endif %}
+           style="width:auto; display:inline-block; margin-right:0.4rem"> Música de fundo</label>
+    <label><span class="rotulo">Arquivo de música (caminho — vazio = sem música)</span>
+      <input type="text" name="musica_arquivo" value="{{ g.montagem.musica_fundo.arquivo }}"></label>
+    <label><span class="rotulo">Intro (caminho de vídeo — opcional)</span>
+      <input type="text" name="montagem_intro" value="{{ g.montagem.intro }}"></label>
+    <label><span class="rotulo">Outro (caminho de vídeo — opcional)</span>
+      <input type="text" name="montagem_outro" value="{{ g.montagem.outro }}"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Variação (0 = idêntico, 1 = sempre varia)</legend>
+    <p><small>Anti-repetição: varia abertura/estrutura/estilo/música para nenhum vídeo sair igual ao anterior.</small></p>
+    <label><span class="rotulo">Aberturas</span>
+      <input type="number" step="0.05" min="0" max="1" name="variacao_aberturas" value="{{ g.variacao.aberturas }}" required></label>
+    <label><span class="rotulo">Estrutura</span>
+      <input type="number" step="0.05" min="0" max="1" name="variacao_estrutura" value="{{ g.variacao.estrutura }}" required></label>
+    <label><span class="rotulo">Música</span>
+      <input type="number" step="0.05" min="0" max="1" name="variacao_musica" value="{{ g.variacao.musica }}" required></label>
+    <label><span class="rotulo">Estilo visual</span>
+      <input type="number" step="0.05" min="0" max="1" name="variacao_estilo_visual" value="{{ g.variacao.estilo_visual }}" required></label>
+    <label><span class="rotulo">Semente (opcional — fixa a variação para reproduzir)</span>
+      <input type="number" name="variacao_semente" value="{{ g.variacao.semente if g.variacao.semente is not none else '' }}"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Orçamento (USD — teto 0 = sem limite, só mede)</legend>
+    <label><span class="rotulo">Por vídeo</span>
+      <input type="number" step="0.01" min="0" name="orcamento_por_video_usd" value="{{ g.orcamento.por_video_usd }}" required></label>
+    <label><span class="rotulo">Por dia</span>
+      <input type="number" step="0.01" min="0" name="orcamento_por_dia_usd" value="{{ g.orcamento.por_dia_usd }}" required></label>
+    <label><span class="rotulo">Ao estourar</span>
+      <select name="orcamento_acao" required>
+        {% for o in acoes_orcamento %}<option value="{{ o }}" {% if g.orcamento.acao == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Checkpoint</legend>
+    <label><input type="checkbox" name="checkpoint_reaproveitar" {% if g.checkpoint.reaproveitar %}checked{% endif %}
+           style="width:auto; display:inline-block; margin-right:0.4rem"> Reaproveitar artefatos válidos ao reexecutar</label>
+  </fieldset>
+
+  <button type="submit">Salvar geração</button>
+</form>
+
+<h3 style="margin-top:1.5rem">Observabilidade — últimas execuções</h3>
+{% if runs_geracao %}
+<div style="overflow-x:auto">
+<table>
+  <thead><tr><th>Início</th><th>Tema</th><th>Status</th><th>Custo (USD)</th><th>Provedores</th><th></th></tr></thead>
+  <tbody>
+    {% for r in runs_geracao %}
+    <tr>
+      <td><small>{{ r.iniciado_em }}</small></td>
+      <td>{{ r.tema }}</td>
+      <td>{{ r.status }}</td>
+      <td>{% if r.get('custo_total') is not none %}{{ '%.4f' | format(r.custo_total) }}{% else %}—{% endif %}</td>
+      <td><small>{% for etapa, prov in (r.get('provedores') or {}).items() %}{{ etapa }}={{ prov }}{% if not loop.last %}, {% endif %}{% endfor %}</small></td>
+      <td>
+        <button class="secundario" hx-post="/tipos/{{ tipo.id }}/geracao/reexecutar/{{ r.id }}"
+                hx-target="#geracao-tab" hx-swap="innerHTML"
+                hx-confirm="Reexecutar reaproveitando a pasta deste run (checkpoint)?">Reexecutar</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p><small>Nenhuma execução ainda para este tipo.</small></p>
+{% endif %}

@@ -180,6 +180,17 @@ class HistoricoExecucoes:
 historico = HistoricoExecucoes(_HISTORICO_PATH)
 
 
+def pasta_da_execucao(registro: dict) -> Path | None:
+    """Pasta do run de uma execução antiga, para reexecutar reaproveitando o
+    checkpoint. `output_path` guarda o video_final.mp4 (a pasta é o pai); num run
+    que falhou antes do vídeo, cai no diretório do log."""
+    if registro.get("output_path"):
+        return Path(registro["output_path"]).parent
+    if registro.get("log_path"):
+        return Path(registro["log_path"]).parent
+    return None
+
+
 class _TransmissorLog:
     """Mantém, em memória, o log ao vivo de cada execução em andamento e
     distribui novas linhas para assinantes (usado pelo endpoint SSE).
@@ -326,7 +337,12 @@ def _publicar_se_configurado(execucao_id: str, tema: str, tipo: TipoVideo, camin
         print(f"AVISO: publicação no YouTube falhou (o vídeo foi gerado normalmente): {e}")
 
 
-def executar_com_captura(tema: str, tipo: TipoVideo, execucao: dict | None = None) -> Path:
+def executar_com_captura(
+    tema: str,
+    tipo: TipoVideo,
+    execucao: dict | None = None,
+    output_path: Path | None = None,
+) -> Path:
     """Executa o pipeline para um tema/tipo, registrando histórico e log da execução.
 
     Ponto de entrada único usado tanto pelo agendador (cron) quanto por disparos
@@ -349,8 +365,12 @@ def executar_com_captura(tema: str, tipo: TipoVideo, execucao: dict | None = Non
     """
     if execucao is None:
         execucao = historico.iniciar(tipo.id, tipo.nome, tema)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = Path(sistema.get("saida.pasta_base")) / tipo.id / timestamp
+    if output_path is None:
+        # Run novo: pasta com timestamp. Reexecutar passa a pasta antiga, e aí o
+        # checkpoint do pipeline reaproveita os artefatos que já existem e validam.
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = Path(sistema.get("saida.pasta_base")) / tipo.id / timestamp
+    output_path = Path(output_path)
     log_path = output_path / "execucao.log"
     historico.definir_log_path(execucao["id"], log_path)
 
