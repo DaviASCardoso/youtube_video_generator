@@ -76,6 +76,29 @@ retenção, orçamento de avaliação e antecedência). As ideias manuais/evergr
 ficam na aba **Ideias**. Requer `TRENDS_MCP_API_KEY` e `GEMINI_API_KEY` no `.env`
 (YouTube precisa do OAuth do tipo; Reddit e Wikipédia são sem chave).
 
+## Geração (por tipo)
+
+A Geração transforma o tema decidido no vídeo final por **estágios explícitos e
+checkpointados** — roteiro → plano visual → visuais → narração → montagem — cada um:
+
+1. **Reaproveita** o artefato se já existe e valida (resumabilidade): uma reexecução
+   retoma de onde parou, sem refazer — e sem pagar de novo — o que já ficou pronto.
+2. Passa por um **gate** de qualidade antes de o próximo estágio gastar.
+3. Roda atrás de um **contrato de provedor** por papel (roteiro/visuais/narração),
+   deixando uma costura limpa para novos provedores (ex.: ElevenLabs).
+4. **Registra o custo** por etapa e respeita o **orçamento** por vídeo/dia (degrada
+   para um provedor mais barato/placeholder, ou para).
+5. **Degrada em vez de quebrar**: retry+backoff, provedor de fallback, placeholder;
+   a narração cai para a **voz secundária**.
+
+Ainda **varia deliberadamente** aberturas/estrutura/estilo/música (anti-repetição) e
+grava, ao lado do `video_final.mp4`, um `sidecar.json` (tema, roteiro, duração,
+provedores e custos) que a Publicação consome. Tudo é editável na aba **Geração** de
+cada tipo (provedores por estágio, tamanho/tom do roteiro, modo/estilo dos visuais,
+voz, legendas, música/intro/outro, variação, orçamento e checkpoint), que também
+mostra a **observabilidade** das últimas execuções (custo/provedor por etapa) e um
+botão **Reexecutar** que retoma a mesma pasta.
+
 ## Como rodar
 
 ```
@@ -161,6 +184,7 @@ Cada teste é pulado automaticamente se a chave correspondente não estiver no `
 - [x] Geração das imagens com referência de estilo
 - [x] Geração da narração
 - [x] Edição e montagem do vídeo
+- [x] Geração em estágios checkpointados (reaproveita artefatos, gates de qualidade, provedores plugáveis, custo/orçamento, variação, degradação graciosa, sidecar)
 - [x] Suporte a múltiplos tipos de vídeo (agendamento, prompts, voz e fila de temas independentes por tipo)
 - [x] Interface web para controle e monitoramento
 - [x] Publicação no YouTube (com trava por tipo; sobe como privado por padrão)
