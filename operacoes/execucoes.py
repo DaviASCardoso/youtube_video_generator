@@ -93,6 +93,7 @@ class HistoricoExecucoes:
                 "output_path": None,
                 "log_path": None,
                 "url_publicacao": None,
+                "publicacao": [],
                 "custo_total": None,
                 "custos": [],
                 "provedores": {},
@@ -117,6 +118,51 @@ class HistoricoExecucoes:
 
     def registrar_publicacao(self, execucao_id: str, url: str) -> dict:
         return self._atualizar(execucao_id, url_publicacao=str(url))
+
+    def registrar_publicacao_destino(self, execucao_id: str, destino: str, dados: dict) -> dict:
+        """Grava (upsert) o published-record de um destino: id/url/quota/visibilidade/
+        status etc. É a base da idempotência — um destino já publicado não sobe de novo.
+
+        Mantém `url_publicacao` (usado nos templates) apontando para a primeira URL
+        publicada com sucesso.
+        """
+        with self._lock:
+            execucoes = self._carregar()
+            for execucao in execucoes:
+                if execucao["id"] == execucao_id:
+                    lista = execucao.setdefault("publicacao", [])
+                    registro = {"destino": destino, **dados}
+                    for i, item in enumerate(lista):
+                        if item.get("destino") == destino:
+                            lista[i] = registro
+                            break
+                    else:
+                        lista.append(registro)
+                    if dados.get("url") and not execucao.get("url_publicacao"):
+                        execucao["url_publicacao"] = dados["url"]
+                    self._salvar(execucoes)
+                    return execucao
+            raise KeyError(f"Execução '{execucao_id}' não encontrada.")
+
+    def publicacao_de(self, execucao_id: str, destino: str) -> dict | None:
+        """Published-record de um destino, ou None se ainda não houver. Usado para
+        reconciliar um retry: se já existe id, não republica."""
+        for execucao in self._carregar():
+            if execucao["id"] == execucao_id:
+                for item in execucao.get("publicacao", []):
+                    if item.get("destino") == destino:
+                        return item
+                return None
+        raise KeyError(f"Execução '{execucao_id}' não encontrada.")
+
+    def marcar_aguardando_publicacao(self, execucao_id: str) -> dict:
+        """Gate de revisão: o vídeo está pronto mas aguarda aprovação humana para ir
+        ao ar. Terminal do lado da geração; a publicação acontece quando aprovado."""
+        return self._atualizar(
+            execucao_id,
+            status="aguardando_publicacao",
+            finalizado_em=datetime.now(timezone.utc).isoformat(),
+        )
 
     def registrar_custos(self, execucao_id: str, ledger) -> dict:
         """Anota no registro o custo/provedor por etapa vindos do Ledger do run."""

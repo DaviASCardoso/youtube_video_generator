@@ -42,6 +42,42 @@ def test_registrar_publicacao(hist):
     assert hist.obter(reg["id"])["url_publicacao"] == "https://youtu.be/ABC"
 
 
+def test_iniciar_inclui_publicacao_vazia(hist):
+    reg = hist.iniciar("canal", "Canal X", "t")
+    assert reg["publicacao"] == []
+
+
+def test_registrar_publicacao_destino_upsert(hist):
+    reg = hist.iniciar("canal", "Canal X", "t")
+    hist.registrar_publicacao_destino(
+        reg["id"], "youtube", {"id": "V1", "url": "https://youtu.be/V1", "quota": 1600, "status": "publicado"}
+    )
+    atual = hist.obter(reg["id"])
+    assert len(atual["publicacao"]) == 1
+    assert atual["publicacao"][0]["destino"] == "youtube"
+    assert atual["url_publicacao"] == "https://youtu.be/V1"  # compat
+
+    # regravar o mesmo destino faz upsert (não duplica)
+    hist.registrar_publicacao_destino(reg["id"], "youtube", {"id": "V1", "status": "publicado", "quota": 1600})
+    assert len(hist.obter(reg["id"])["publicacao"]) == 1
+
+
+def test_publicacao_de_reconcilia(hist):
+    reg = hist.iniciar("canal", "Canal X", "t")
+    assert hist.publicacao_de(reg["id"], "youtube") is None
+    hist.registrar_publicacao_destino(reg["id"], "youtube", {"id": "V9", "status": "publicado"})
+    rec = hist.publicacao_de(reg["id"], "youtube")
+    assert rec["id"] == "V9"  # já publicado -> caller não republica
+
+
+def test_marcar_aguardando_publicacao(hist):
+    reg = hist.iniciar("canal", "Canal X", "t")
+    hist.marcar_aguardando_publicacao(reg["id"])
+    atual = hist.obter(reg["id"])
+    assert atual["status"] == "aguardando_publicacao"
+    assert atual["finalizado_em"] is not None
+
+
 def test_em_execucao(hist):
     assert hist.em_execucao("canal") is False
     hist.iniciar("canal", "Canal X", "t")
