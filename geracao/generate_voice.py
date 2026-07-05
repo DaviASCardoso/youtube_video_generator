@@ -20,7 +20,9 @@ def _suporta_pitch(voz: str) -> bool:
     return "chirp" not in voz.lower()
 
 
-def gerar_narracao(texto: str, caminho_saida: str | Path, config: Config) -> Path:
+def gerar_narracao(
+    texto: str, caminho_saida: str | Path, config: Config, voz: str | None = None
+) -> Path:
     if not texto.strip():
         raise ValueError("O texto para narração não pode estar vazio.")
 
@@ -28,7 +30,8 @@ def gerar_narracao(texto: str, caminho_saida: str | Path, config: Config) -> Pat
 
     entrada = texttospeech.SynthesisInput(text=texto)
 
-    nome_voz = config.get("tts.voz")
+    # `voz` sobrepõe a voz do config (usado no fallback para a voz secundária).
+    nome_voz = voz or config.get("tts.voz")
     voz = texttospeech.VoiceSelectionParams(
         language_code=config.get("tts.idioma"),
         name=nome_voz,
