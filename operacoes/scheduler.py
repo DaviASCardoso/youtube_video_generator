@@ -16,6 +16,7 @@ from operacoes.execucoes import (
     executar_com_captura,
     historico,
     pasta_da_execucao,
+    publicar_execucao,
 )
 
 scheduler = BackgroundScheduler(
@@ -126,6 +127,10 @@ def _job_descoberta(tipo_id: str) -> None:
 def _job_reservado(tipo_id: str, tema: str, execucao: dict, output_path=None) -> None:
     tipo = carregar_tipo(tipo_id)
     executar_com_captura(tema, tipo, execucao=execucao, output_path=output_path)
+
+
+def _job_publicar(execucao_id: str) -> None:
+    publicar_execucao(execucao_id)
 
 
 def registrar_job(tipo: TipoVideo) -> None:
@@ -253,6 +258,20 @@ def reexecutar_agora(execucao_id: str) -> dict:
         id=f"reexec-{execucao['id']}",
     )
     return execucao
+
+
+def publicar_agora(execucao_id: str) -> None:
+    """Dispara a publicação/reconciliação de uma execução no mesmo executor dos jobs
+    (o botão "Aprovar & publicar"/"Republicar" do painel). Roda em background para a
+    requisição HTTP retornar sem esperar o upload."""
+    scheduler.add_job(
+        _job_publicar,
+        trigger="date",
+        run_date=datetime.now(),
+        args=[execucao_id],
+        id=f"publicar-{execucao_id}",
+        replace_existing=True,
+    )
 
 
 def atualizar_max_simultaneo(max_simultaneo: int) -> None:

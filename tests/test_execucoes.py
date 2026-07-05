@@ -225,6 +225,26 @@ def test_executar_com_captura_gera_e_conclui_sem_destino(
     assert reg["provedores"] == {"roteiro": "groq"}
 
 
+def test_publicar_execucao_delega_ao_publicador(monkeypatch, tmp_path):
+    hist = HistoricoExecucoes(tmp_path / "h.json")
+    monkeypatch.setattr(execucoes, "historico", hist)
+    reg = hist.iniciar("canal", "Canal", "t")
+    hist.definir_log_path(reg["id"], tmp_path / "run" / "execucao.log")
+
+    import publicacao.publicador as pub
+
+    chamou = {}
+
+    def fake_aprovado(eid, ledger=None):
+        chamou["eid"] = eid
+        return "publicado"
+
+    monkeypatch.setattr(pub, "publicar_aprovado", fake_aprovado)
+    out = execucoes.publicar_execucao(reg["id"])
+    assert out == "publicado"
+    assert chamou["eid"] == reg["id"]
+
+
 def test_pasta_da_execucao_do_output_path():
     reg = {"output_path": "output/tipo/2026/video_final.mp4", "log_path": None}
     assert execucoes.pasta_da_execucao(reg).as_posix() == "output/tipo/2026"

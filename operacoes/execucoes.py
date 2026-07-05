@@ -423,3 +423,30 @@ def executar_com_captura(
     finally:
         _proxy.desativar()
         tee.close()
+
+
+def publicar_execucao(execucao_id: str) -> str:
+    """Publica (ou reconcilia) uma execução já gerada — o caminho do botão "Aprovar &
+    publicar" do gate de revisão e do "Republicar" após falha parcial. Reaproveita os
+    metadados/thumbnail já checkpointados; idempotente por destino. Captura o log na
+    mesma `execucao.log` do run. Devolve o desfecho de `publicador.publicar_aprovado`.
+    """
+    from publicacao import publicador
+
+    registro_exec = historico.obter(execucao_id)
+    pasta = pasta_da_execucao(registro_exec)
+    log_path = (
+        Path(registro_exec["log_path"]) if registro_exec.get("log_path")
+        else (pasta / "execucao.log" if pasta else None)
+    )
+    if log_path is None:
+        raise ValueError("Execução sem pasta/log para publicar.")
+
+    tee = _TeeStdout(execucao_id, log_path)
+    _proxy.ativar(tee)
+    try:
+        print("\nPublicando (aprovação/reconciliação)...")
+        return publicador.publicar_aprovado(execucao_id)
+    finally:
+        _proxy.desativar()
+        tee.close()

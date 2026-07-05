@@ -24,6 +24,7 @@ from geracao.generate_image import ASPECT_RATIOS
 from api.routers.assets import contexto_prompts
 from api.routers.descoberta import contexto_descoberta
 from api.routers.geracao import contexto_geracao
+from api.routers.publicacao import contexto_publicacao
 from api.routers.temas import contexto_temas
 
 router = APIRouter(prefix="/tipos", tags=["tipos"])
@@ -146,6 +147,7 @@ def pagina_editar(id: str, request: Request):
             **contexto_prompts(tipo),
             **contexto_descoberta(tipo),
             **contexto_geracao(tipo),
+            **contexto_publicacao(tipo),
             **contexto_temas(tipo),
         },
     )

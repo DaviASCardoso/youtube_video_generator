@@ -1,0 +1,154 @@
+{% if sucesso %}
+<div class="aviso sucesso">Configuração de publicação salva com sucesso.</div>
+{% endif %}
+{% if erro %}
+<div class="aviso erro">{{ erro }}</div>
+{% endif %}
+
+{% if credencial %}
+<div class="aviso" style="border-left:4px solid #888">
+  <strong>Credencial {{ credencial.destino }}:</strong> {{ credencial.status }}
+  {% if credencial.detalhe %}<br><small>{{ credencial.detalhe }}</small>{% endif %}
+</div>
+{% endif %}
+
+<form hx-post="/tipos/{{ tipo.id }}/publicacao" hx-target="#publicacao-tab" hx-swap="innerHTML">
+  <fieldset>
+    <legend>Gate de revisão</legend>
+    <label><span class="rotulo">Como publicar</span>
+      <select name="revisao" required>
+        {% for o in modos_revisao %}<option value="{{ o }}" {% if p.revisao == o %}selected{% endif %}>{{ 'auto (publica sozinho)' if o == 'auto' else 'revisar (aguarda aprovação)' }}</option>{% endfor %}
+      </select></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Quando publicar</legend>
+    <label><span class="rotulo">Timing</span>
+      <select name="timing_modo" required>
+        {% for o in modos_timing %}<option value="{{ o }}" {% if p.timing.modo == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+    <label><span class="rotulo">Horário de go-live (quando agendado, HH:MM)</span>
+      <input type="text" name="timing_horario" value="{{ p.timing.horario }}" required></label>
+    <label><span class="rotulo">Fuso horário</span>
+      <input type="text" name="timing_fuso_horario" value="{{ p.timing.fuso_horario }}" required></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Visibilidade & disclosure</legend>
+    <label><span class="rotulo">Privacidade</span>
+      <select name="vis_privacidade" required>
+        {% for o in privacidades %}<option value="{{ o }}" {% if p.visibilidade.privacidade == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+    <label><span class="rotulo">Audiência</span>
+      <select name="vis_audiencia" required>
+        {% for o in audiencias %}<option value="{{ o }}" {% if p.visibilidade.audiencia == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+    <label><input type="checkbox" name="vis_disclosure" {% if p.visibilidade.disclosure_sintetico %}checked{% endif %}
+           style="width:auto; display:inline-block; margin-right:0.4rem"> Declarar mídia sintética (obrigatório desde jan/2026)</label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Metadados (motor: Groq, fixo)</legend>
+    <label><span class="rotulo">Tom (vazio = persona do prompt)</span>
+      <input type="text" name="meta_tom" value="{{ p.metadados.tom }}"></label>
+    <label><span class="rotulo">Molde de título (opcional)</span>
+      <input type="text" name="meta_template_titulo" value="{{ p.metadados.template_titulo }}"></label>
+    <label><span class="rotulo">Molde de descrição (opcional)</span>
+      <input type="text" name="meta_template_descricao" value="{{ p.metadados.template_descricao }}"></label>
+    <label><span class="rotulo">Estratégia de tags</span>
+      <select name="meta_estrategia_tags" required>
+        {% for o in estrategias_tags %}<option value="{{ o }}" {% if p.metadados.estrategia_tags == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+    <label><span class="rotulo">Máx. de tags (0–50)</span>
+      <input type="number" min="0" max="50" name="meta_max_tags" value="{{ p.metadados.max_tags }}" required></label>
+    <p><small>A persona/base do prompt vive na aba <strong>Prompts</strong> (system_prompt_metadados.txt).</small></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Thumbnail</legend>
+    <label><input type="checkbox" name="thumb_ativo" {% if p.thumbnail.ativo %}checked{% endif %}
+           style="width:auto; display:inline-block; margin-right:0.4rem"> Gerar thumbnail (importa pouco em short-form)</label>
+    <label><span class="rotulo">Fonte do fundo</span>
+      <select name="thumb_fonte_fundo" required>
+        {% for o in fontes_fundo %}<option value="{{ o }}" {% if p.thumbnail.fonte_fundo == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+    <label><span class="rotulo">Fonte do texto (.ttf — vazio = padrão)</span>
+      <input type="text" name="thumb_fonte" value="{{ p.thumbnail.texto.fonte }}"></label>
+    <label><span class="rotulo">Tamanho do texto (8–400)</span>
+      <input type="number" min="8" max="400" name="thumb_tamanho" value="{{ p.thumbnail.texto.tamanho }}" required></label>
+    <label><span class="rotulo">Cor do texto (hex)</span>
+      <input type="text" name="thumb_cor" value="{{ p.thumbnail.texto.cor }}" required></label>
+    <label><span class="rotulo">Posição</span>
+      <select name="thumb_posicao" required>
+        {% for o in posicoes_texto %}<option value="{{ o }}" {% if p.thumbnail.texto.posicao == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+    <label><span class="rotulo">Cor do contorno (hex)</span>
+      <input type="text" name="thumb_contorno_cor" value="{{ p.thumbnail.texto.contorno_cor }}" required></label>
+    <label><span class="rotulo">Largura do contorno (0–40)</span>
+      <input type="number" min="0" max="40" name="thumb_contorno_largura" value="{{ p.thumbnail.texto.contorno_largura }}" required></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Cota</legend>
+    <label><span class="rotulo">Máx. de uploads por dia por credencial (0 = sem limite)</span>
+      <input type="number" min="0" max="1000" name="quota_cap_diario" value="{{ p.quota.cap_diario }}" required></label>
+    <label><span class="rotulo">Ao atingir</span>
+      <select name="quota_acao" required>
+        {% for o in acoes_quota %}<option value="{{ o }}" {% if p.quota.acao == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Destino: YouTube</legend>
+    <label><input type="checkbox" name="yt_ativo" {% if p.destinos.youtube.ativo %}checked{% endif %}
+           style="width:auto; display:inline-block; margin-right:0.4rem"> Publicar no YouTube</label>
+    <label><span class="rotulo">Categoria (id numérico)</span>
+      <input type="text" name="yt_categoria_id" value="{{ p.destinos.youtube.categoria_id }}" required></label>
+    <label><span class="rotulo">Idioma (ex: pt-BR)</span>
+      <input type="text" name="yt_idioma" value="{{ p.destinos.youtube.idioma }}" required></label>
+    <label><span class="rotulo">Playlist (id — opcional)</span>
+      <input type="text" name="yt_playlist" value="{{ p.destinos.youtube.playlist }}"></label>
+    <label><span class="rotulo">Tags fixas (separadas por vírgula)</span>
+      <input type="text" name="yt_tags_base" value="{{ p.destinos.youtube.tags_base | join(', ') }}"></label>
+    <label><span class="rotulo">Rodapé fixo da descrição</span>
+      <textarea name="yt_descricao_base" rows="2">{{ p.destinos.youtube.descricao_base }}</textarea></label>
+    <button type="button" class="secundario" hx-post="/tipos/{{ tipo.id }}/publicacao/credencial/youtube"
+            hx-target="#publicacao-tab" hx-swap="innerHTML">Verificar credencial</button>
+    <p><small>Credencial por tipo em tipos/{{ tipo.id }}/youtube_token.json (isola a cota do canal).</small></p>
+  </fieldset>
+
+  <button type="submit">Salvar publicação</button>
+</form>
+
+<h3 style="margin-top:1.5rem">Publicações — últimas execuções</h3>
+{% if runs_publicacao %}
+<div style="overflow-x:auto">
+<table>
+  <thead><tr><th>Início</th><th>Tema</th><th>Status</th><th>Destinos</th><th></th></tr></thead>
+  <tbody>
+    {% for r in runs_publicacao %}
+    <tr>
+      <td><small>{{ r.iniciado_em }}</small></td>
+      <td>{{ r.tema }}</td>
+      <td>{{ r.status }}</td>
+      <td><small>
+        {% for pub in r.get('publicacao') or [] %}
+          {{ pub.destino }}={{ pub.status }}{% if pub.get('url') %} (<a href="{{ pub.url }}" target="_blank">link</a>){% endif %}{% if not loop.last %}; {% endif %}
+        {% else %}—{% endfor %}
+      </small></td>
+      <td>
+        {% if r.status == 'aguardando_publicacao' or (r.get('publicacao') and r.status == 'concluido') %}
+        <button class="secundario" hx-post="/tipos/{{ tipo.id }}/publicacao/publicar/{{ r.id }}"
+                hx-target="#publicacao-tab" hx-swap="innerHTML"
+                hx-confirm="Publicar/reconciliar esta execução (idempotente — não reenvia o que já subiu)?">
+          {{ 'Aprovar & publicar' if r.status == 'aguardando_publicacao' else 'Republicar' }}</button>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p><small>Nenhuma execução ainda para este tipo.</small></p>
+{% endif %}

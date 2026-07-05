@@ -171,3 +171,13 @@ def test_reexecutar_agora_sem_pasta_erra(make_tipo, monkeypatch):
     monkeypatch.setattr(sched.historico, "obter", lambda eid: registro)
     with pytest.raises(ValueError):
         sched.reexecutar_agora("v")
+
+
+# --- publicar_agora ---
+
+def test_publicar_agora_agenda_job(monkeypatch):
+    capturado = {}
+    monkeypatch.setattr(sched.scheduler, "add_job", lambda *a, **k: capturado.update(kwargs=k))
+    sched.publicar_agora("EX1")
+    assert capturado["kwargs"]["args"] == ["EX1"]
+    assert capturado["kwargs"]["id"] == "publicar-EX1"
