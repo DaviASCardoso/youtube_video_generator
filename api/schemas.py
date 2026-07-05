@@ -10,6 +10,14 @@ from descoberta.configuracao import (
     REDDIT_PERIODOS,
 )
 from geracao.compositor import POSICOES
+from geracao.configuracao import (
+    ACOES_ORCAMENTO,
+    FALLBACKS_VISUAIS,
+    POSICOES_LEGENDA,
+    PROVEDORES_NARRACAO,
+    PROVEDORES_ROTEIRO,
+    PROVEDORES_VISUAIS,
+)
 from geracao.generate_image import ASPECT_RATIOS
 
 _HORARIO_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -255,6 +263,114 @@ class DescobertaConfig(BaseModel):
         return v
 
 
+class RoteiroGeracaoConfig(BaseModel):
+    provedor: str
+    duracao_alvo_seg: int = Field(ge=5, le=3600)
+    tom: str = ""
+    min_palavras: int = Field(ge=0)
+    max_palavras: int = Field(ge=1)
+
+    @field_validator("provedor")
+    @classmethod
+    def _validar_provedor(cls, v):
+        if v not in PROVEDORES_ROTEIRO:
+            raise ValueError(f"provedor deve ser um de: {', '.join(PROVEDORES_ROTEIRO)}")
+        return v
+
+
+class VisuaisGeracaoConfig(BaseModel):
+    provedor: str
+    imagens_por_cena: int = Field(ge=1, le=10)
+    fallback: str
+
+    @field_validator("provedor")
+    @classmethod
+    def _validar_provedor(cls, v):
+        if v not in PROVEDORES_VISUAIS:
+            raise ValueError(f"provedor deve ser um de: {', '.join(PROVEDORES_VISUAIS)}")
+        return v
+
+    @field_validator("fallback")
+    @classmethod
+    def _validar_fallback(cls, v):
+        if v not in FALLBACKS_VISUAIS:
+            raise ValueError(f"fallback deve ser um de: {', '.join(FALLBACKS_VISUAIS)}")
+        return v
+
+
+class NarracaoGeracaoConfig(BaseModel):
+    provedor: str
+    voz_secundaria: str = ""
+
+    @field_validator("provedor")
+    @classmethod
+    def _validar_provedor(cls, v):
+        if v not in PROVEDORES_NARRACAO:
+            raise ValueError(f"provedor deve ser um de: {', '.join(PROVEDORES_NARRACAO)}")
+        return v
+
+
+class LegendasConfig(BaseModel):
+    ativo: bool
+    tamanho: int = Field(ge=8, le=200)
+    cor: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    posicao: str
+
+    @field_validator("posicao")
+    @classmethod
+    def _validar_posicao(cls, v):
+        if v not in POSICOES_LEGENDA:
+            raise ValueError(f"posicao deve ser uma de: {', '.join(POSICOES_LEGENDA)}")
+        return v
+
+
+class MusicaFundoConfig(BaseModel):
+    ativo: bool
+    arquivo: str = ""
+
+
+class MontagemGeracaoConfig(BaseModel):
+    musica_fundo: MusicaFundoConfig
+    intro: str = ""
+    outro: str = ""
+
+
+class VariacaoConfig(BaseModel):
+    aberturas: float = Field(ge=0.0, le=1.0)
+    estrutura: float = Field(ge=0.0, le=1.0)
+    musica: float = Field(ge=0.0, le=1.0)
+    estilo_visual: float = Field(ge=0.0, le=1.0)
+    semente: int | None = None
+
+
+class OrcamentoConfig(BaseModel):
+    por_video_usd: float = Field(ge=0.0)
+    por_dia_usd: float = Field(ge=0.0)
+    acao: str
+
+    @field_validator("acao")
+    @classmethod
+    def _validar_acao(cls, v):
+        if v not in ACOES_ORCAMENTO:
+            raise ValueError(f"acao deve ser uma de: {', '.join(ACOES_ORCAMENTO)}")
+        return v
+
+
+class CheckpointConfig(BaseModel):
+    reaproveitar: bool
+
+
+class GeracaoConfig(BaseModel):
+    roteiro: RoteiroGeracaoConfig
+    visuais: VisuaisGeracaoConfig
+    narracao: NarracaoGeracaoConfig
+    legendas: LegendasConfig
+    montagem: MontagemGeracaoConfig
+    variacao: VariacaoConfig
+    orcamento: OrcamentoConfig
+    checkpoint: CheckpointConfig
+
+
 class TipoConfig(BaseModel):
     nome: str = Field(min_length=1)
     ativo: bool
@@ -266,6 +382,7 @@ class TipoConfig(BaseModel):
     agendamento: AgendamentoConfig
     youtube: YoutubeConfig
     descoberta: DescobertaConfig
+    geracao: GeracaoConfig
 
 
 class CriarTipoForm(BaseModel):

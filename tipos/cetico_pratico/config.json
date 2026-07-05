@@ -103,5 +103,52 @@
     "modo_revisao": "auto",
     "retencao": "descartar",
     "orcamento_avaliacao": 3
+  },
+  "geracao": {
+    "roteiro": {
+      "provedor": "groq",
+      "duracao_alvo_seg": 60,
+      "tom": "",
+      "min_palavras": 1,
+      "max_palavras": 100000
+    },
+    "visuais": {
+      "provedor": "auto",
+      "imagens_por_cena": 1,
+      "fallback": "pexels"
+    },
+    "narracao": {
+      "provedor": "google",
+      "voz_secundaria": ""
+    },
+    "legendas": {
+      "ativo": false,
+      "tamanho": 48,
+      "cor": "#FFFFFF",
+      "posicao": "inferior"
+    },
+    "montagem": {
+      "musica_fundo": {
+        "ativo": false,
+        "arquivo": ""
+      },
+      "intro": "",
+      "outro": ""
+    },
+    "variacao": {
+      "aberturas": 0.3,
+      "estrutura": 0.3,
+      "musica": 0.3,
+      "estilo_visual": 0.3,
+      "semente": null
+    },
+    "orcamento": {
+      "por_video_usd": 1.0,
+      "por_dia_usd": 10.0,
+      "acao": "degradar"
+    },
+    "checkpoint": {
+      "reaproveitar": true
+    }
   }
 }

@@ -7,6 +7,7 @@ import unicodedata
 from config.settings import Config
 from descoberta.configuracao import DESCOBERTA_PADRAO
 from descoberta.temas import FilaDeTemas
+from geracao.configuracao import GERACAO_PADRAO
 
 _TIPOS_DIR = Path(__file__).parent.parent / "tipos"
 
@@ -35,6 +36,7 @@ DEFAULT_CONFIG = {
         "descricao_base": "",
     },
     "descoberta": DESCOBERTA_PADRAO,
+    "geracao": GERACAO_PADRAO,
 }
 
 ASSETS_PADRAO = (

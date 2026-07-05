@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from api.schemas import TipoConfig
 from api.templating import templates
 from descoberta.configuracao import mesclar_descoberta
+from geracao.configuracao import mesclar_geracao
 from operacoes import scheduler as scheduler_mod
 from config.constantes import FREQUENCIAS, MODOS_IMAGEM, VISIBILIDADES
 from config.tipos import (
@@ -226,9 +227,11 @@ def salvar_config(
     }
 
     tipo_atual = carregar_tipo(id)
-    # Preserva o bloco de Descoberta (editado noutra aba): esta aba faz
-    # whole-file replace do config.json e o apagaria sem isto.
-    dados["descoberta"] = mesclar_descoberta(tipo_atual.config.get_all().get("descoberta"))
+    # Preserva os blocos editados noutras abas (Descoberta, Geração): esta aba faz
+    # whole-file replace do config.json e os apagaria sem isto.
+    atual = tipo_atual.config.get_all()
+    dados["descoberta"] = mesclar_descoberta(atual.get("descoberta"))
+    dados["geracao"] = mesclar_geracao(atual.get("geracao"))
     contexto_base = {
         "request": request,
         "tipo": tipo_atual,

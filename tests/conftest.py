@@ -15,6 +15,7 @@ import pytest
 from PIL import Image
 
 from descoberta.configuracao import DESCOBERTA_PADRAO
+from geracao.configuracao import GERACAO_PADRAO
 
 
 # --- Testes de API real (opt-in) -------------------------------------------
@@ -109,6 +110,7 @@ _CONFIG_TIPO_PADRAO = {
         "descricao_base": "",
     },
     "descoberta": DESCOBERTA_PADRAO,
+    "geracao": GERACAO_PADRAO,
 }
 
 
