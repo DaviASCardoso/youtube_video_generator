@@ -8,7 +8,6 @@ import threading
 
 from config.tipos import TipoVideo
 from config.sistema import sistema
-from geracao import sidecar
 from geracao.custo import Ledger
 from geracao.pipeline import gerar_video
 
@@ -351,36 +350,22 @@ if not isinstance(sys.stdout, _StdoutProxy):
 _proxy: _StdoutProxy = sys.stdout
 
 
-def _publicar_se_configurado(execucao_id: str, tema: str, tipo: TipoVideo, caminho_video: Path) -> None:
-    """Publica o vídeo no YouTube se o tipo tiver youtube.publicar ligado.
+def _publicar_se_configurado(execucao_id: str, tipo: TipoVideo, caminho_video: Path, ledger=None) -> str:
+    """Delega ao Pilar de Publicação (metadados Groq → thumbnail → destinos).
 
-    Roda dentro da captura de log (aparece no log ao vivo). Uma falha de
-    publicação é registrada mas NÃO derruba a execução — o vídeo já foi gerado
-    e continua no disco para publicar manualmente depois.
+    Roda dentro da captura de log (aparece no log ao vivo). Uma falha global é
+    registrada mas NÃO derruba a execução — o vídeo já foi gerado e continua no
+    disco. Devolve o desfecho (ver `publicador.publicar`): "sem_destino",
+    "aguardando_revisao" ou "publicado".
     """
-    try:
-        publicar = tipo.config.get("youtube.publicar")
-    except KeyError:
-        return  # tipos antigos, sem o campo
-    if not publicar:
-        return
-
-    # import tardio: só puxa as libs do Google quando realmente vai publicar
-    from publicacao import youtube
+    # import tardio: só puxa Publicação (e as libs do Google) quando o run termina
+    from publicacao import publicador
 
     try:
-        # Handoff pela Geração: o sidecar traz o roteiro; se faltar, cai no roteiro.txt.
-        base = Path(caminho_video).parent
-        registro = sidecar.ler(base) or {}
-        roteiro = registro.get("roteiro")
-        if roteiro is None:
-            roteiro_path = base / "roteiro.txt"
-            roteiro = roteiro_path.read_text(encoding="utf-8") if roteiro_path.exists() else ""
-        print("\nPublicando no YouTube...")
-        url = youtube.publicar_video(caminho_video, tema, tipo, roteiro)
-        historico.registrar_publicacao(execucao_id, url)
-    except Exception as e:
-        print(f"AVISO: publicação no YouTube falhou (o vídeo foi gerado normalmente): {e}")
+        return publicador.publicar(tipo, Path(caminho_video).parent, execucao_id, ledger=ledger)
+    except Exception as e:  # noqa: BLE001
+        print(f"AVISO: publicação falhou (o vídeo foi gerado normalmente): {e}")
+        return "erro"
 
 
 def executar_com_captura(
@@ -426,8 +411,11 @@ def executar_com_captura(
     try:
         caminho = gerar_video(tema=tema, tipo=tipo, output_path=output_path, ledger=ledger)
         historico.registrar_custos(execucao["id"], ledger)
-        _publicar_se_configurado(execucao["id"], tema, tipo, caminho)
-        historico.concluir(execucao["id"], caminho)
+        _publicar_se_configurado(execucao["id"], tipo, caminho, ledger=ledger)
+        # A publicação pode ter marcado o run como "aguardando_publicacao" (gate de
+        # revisão); só concluímos se ela não moveu o status.
+        if historico.obter(execucao["id"])["status"] == "executando":
+            historico.concluir(execucao["id"], caminho)
         return caminho
     except Exception as e:
         historico.falhar(execucao["id"], str(e))

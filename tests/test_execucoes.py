@@ -159,71 +159,45 @@ def test_transmissor_desassinar_para_de_receber():
     assert fila.empty()
 
 
-# --- _publicar_se_configurado (hook de publicação) ---
+# --- _publicar_se_configurado (delega ao Pilar de Publicação) ---
 
-def test_publicar_desligado_nao_chama_youtube(make_tipo, monkeypatch, tmp_path):
-    tipo = make_tipo(config_extra=_youtube_cfg(publicar=False))
-    import publicacao.youtube as y
+def test_publicar_delega_ao_publicador(make_tipo, monkeypatch, tmp_path):
+    tipo = make_tipo()
+    import publicacao.publicador as pub
 
-    chamou = []
-    monkeypatch.setattr(y, "publicar_video", lambda *a, **k: chamou.append(1))
-    execucoes._publicar_se_configurado("id", "tema", tipo, tmp_path / "video_final.mp4")
-    assert chamou == []
+    chamadas = {}
 
+    def fake_publicar(tp, pasta, eid, ledger=None):
+        chamadas["pasta"] = pasta
+        chamadas["eid"] = eid
+        return "publicado"
 
-def test_publicar_ligado_publica_e_registra_url(make_tipo, monkeypatch, tmp_path):
-    tipo = make_tipo(config_extra=_youtube_cfg(publicar=True))
-    hist = HistoricoExecucoes(tmp_path / "h.json")
-    monkeypatch.setattr(execucoes, "historico", hist)
-    reg = hist.iniciar(tipo.id, tipo.nome, "tema")
-
-    video = tmp_path / "out" / "video_final.mp4"
-    video.parent.mkdir()
-    video.write_bytes(b"x")
-    (video.parent / "roteiro.txt").write_text("meu roteiro", encoding="utf-8")
-
-    import publicacao.youtube as y
-
-    capturado = {}
-
-    def fake_publicar(vp, tema, tp, roteiro):
-        capturado["roteiro"] = roteiro
-        return "https://youtu.be/AAA"
-
-    monkeypatch.setattr(y, "publicar_video", fake_publicar)
-
-    execucoes._publicar_se_configurado(reg["id"], "tema", tipo, video)
-    assert hist.obter(reg["id"])["url_publicacao"] == "https://youtu.be/AAA"
-    assert capturado["roteiro"] == "meu roteiro"  # roteiro.txt entra na descrição
+    monkeypatch.setattr(pub, "publicar", fake_publicar)
+    out = execucoes._publicar_se_configurado("EX", tipo, tmp_path / "video_final.mp4")
+    assert out == "publicado"
+    assert chamadas["pasta"] == tmp_path  # pasta = pai do video_final.mp4
+    assert chamadas["eid"] == "EX"
 
 
-def test_publicar_falha_nao_derruba_execucao(make_tipo, monkeypatch, tmp_path):
-    tipo = make_tipo(config_extra=_youtube_cfg(publicar=True))
-    hist = HistoricoExecucoes(tmp_path / "h.json")
-    monkeypatch.setattr(execucoes, "historico", hist)
-    reg = hist.iniciar(tipo.id, tipo.nome, "tema")
-
-    video = tmp_path / "video_final.mp4"
-    video.write_bytes(b"x")
-
-    import publicacao.youtube as y
+def test_publicar_falha_global_nao_derruba(make_tipo, monkeypatch, tmp_path):
+    tipo = make_tipo()
+    import publicacao.publicador as pub
 
     def boom(*a, **k):
-        raise RuntimeError("sem token")
+        raise RuntimeError("publicação explodiu")
 
-    monkeypatch.setattr(y, "publicar_video", boom)
-
-    # não deve levantar; a URL fica None (publicação falhou, vídeo ok)
-    execucoes._publicar_se_configurado(reg["id"], "tema", tipo, video)
-    assert hist.obter(reg["id"])["url_publicacao"] is None
+    monkeypatch.setattr(pub, "publicar", boom)
+    # não deve levantar — o vídeo já está no disco
+    assert execucoes._publicar_se_configurado("EX", tipo, tmp_path / "video_final.mp4") == "erro"
 
 
-def test_executar_com_captura_gera_publica_e_conclui(
+def test_executar_com_captura_gera_e_conclui_sem_destino(
     make_tipo, monkeypatch, tmp_path, sistema_temp
 ):
-    """Fluxo completo: gerar_video (mockado) -> publicar (mockado) -> concluir."""
+    """Fluxo completo com a config default: gera, não há destino ativo (como hoje),
+    e conclui. Prova que a publicação default é no-op e não derruba o run."""
     sistema_temp._config["saida"]["pasta_base"] = str(tmp_path / "out")
-    tipo = make_tipo(config_extra=_youtube_cfg(publicar=True))
+    tipo = make_tipo()  # nenhum destino de publicação ativo (default)
     hist = HistoricoExecucoes(tmp_path / "h.json")
     monkeypatch.setattr(execucoes, "historico", hist)
 
@@ -232,7 +206,6 @@ def test_executar_com_captura_gera_publica_e_conclui(
 
         base = Path(output_path)
         base.mkdir(parents=True, exist_ok=True)
-        (base / "roteiro.txt").write_text("roteiro", encoding="utf-8")
         if ledger is not None:
             ledger.registrar("roteiro", "groq", 0.0005)
         video = base / "video_final.mp4"
@@ -241,17 +214,14 @@ def test_executar_com_captura_gera_publica_e_conclui(
 
     monkeypatch.setattr(execucoes, "gerar_video", fake_gerar)
 
-    import publicacao.youtube as y
-
-    monkeypatch.setattr(y, "publicar_video", lambda *a, **k: "https://youtu.be/ZZZ")
-
     caminho = execucoes.executar_com_captura("meu tema", tipo)
     assert caminho.name == "video_final.mp4"
 
     reg = hist.listar(tipo.id)[0]
     assert reg["status"] == "concluido"
-    assert reg["url_publicacao"] == "https://youtu.be/ZZZ"
-    assert reg["custo_total"] == 0.0005  # ledger do run anotado no histórico
+    assert reg["url_publicacao"] is None  # nada publicado
+    assert reg["publicacao"] == []
+    assert reg["custo_total"] == 0.0005
     assert reg["provedores"] == {"roteiro": "groq"}
 
 
@@ -313,26 +283,3 @@ def test_registrar_custos_anota_ledger(hist):
     assert len(atualizado["custos"]) == 2
 
 
-def test_publicar_prefere_roteiro_do_sidecar(make_tipo, monkeypatch, tmp_path):
-    from geracao import sidecar as sc
-
-    tipo = make_tipo(config_extra=_youtube_cfg(publicar=True))
-    hist = HistoricoExecucoes(tmp_path / "h.json")
-    monkeypatch.setattr(execucoes, "historico", hist)
-    reg = hist.iniciar(tipo.id, tipo.nome, "tema")
-
-    video = tmp_path / "out" / "video_final.mp4"
-    video.parent.mkdir()
-    video.write_bytes(b"x")
-    # sidecar e roteiro.txt divergem: o handoff deve usar o sidecar.
-    sc.escrever(video.parent, {"roteiro": "roteiro do sidecar"})
-    (video.parent / "roteiro.txt").write_text("roteiro antigo", encoding="utf-8")
-
-    import publicacao.youtube as y
-
-    capturado = {}
-    monkeypatch.setattr(
-        y, "publicar_video", lambda vp, tema, tp, roteiro: capturado.setdefault("r", roteiro) or "u"
-    )
-    execucoes._publicar_se_configurado(reg["id"], "tema", tipo, video)
-    assert capturado["r"] == "roteiro do sidecar"
