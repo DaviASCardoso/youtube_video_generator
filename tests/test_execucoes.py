@@ -191,12 +191,14 @@ def test_executar_com_captura_gera_publica_e_conclui(
     hist = HistoricoExecucoes(tmp_path / "h.json")
     monkeypatch.setattr(execucoes, "historico", hist)
 
-    def fake_gerar(tema, tipo, output_path):
+    def fake_gerar(tema, tipo, output_path, ledger=None):
         from pathlib import Path
 
         base = Path(output_path)
         base.mkdir(parents=True, exist_ok=True)
         (base / "roteiro.txt").write_text("roteiro", encoding="utf-8")
+        if ledger is not None:
+            ledger.registrar("roteiro", "groq", 0.0005)
         video = base / "video_final.mp4"
         video.write_bytes(b"x")
         return video
@@ -213,3 +215,52 @@ def test_executar_com_captura_gera_publica_e_conclui(
     reg = hist.listar(tipo.id)[0]
     assert reg["status"] == "concluido"
     assert reg["url_publicacao"] == "https://youtu.be/ZZZ"
+    assert reg["custo_total"] == 0.0005  # ledger do run anotado no histórico
+    assert reg["provedores"] == {"roteiro": "groq"}
+
+
+def test_iniciar_inclui_campos_de_custo(hist):
+    reg = hist.iniciar("canal", "Canal X", "t")
+    assert reg["custo_total"] is None
+    assert reg["custos"] == []
+    assert reg["provedores"] == {}
+
+
+def test_registrar_custos_anota_ledger(hist):
+    from geracao.custo import Ledger
+
+    reg = hist.iniciar("canal", "Canal X", "t")
+    led = Ledger()
+    led.registrar("roteiro", "groq", 0.0005)
+    led.registrar("visuais", "flux", 0.02)
+    hist.registrar_custos(reg["id"], led)
+
+    atualizado = hist.obter(reg["id"])
+    assert abs(atualizado["custo_total"] - 0.0205) < 1e-9
+    assert atualizado["provedores"]["visuais"] == "flux"
+    assert len(atualizado["custos"]) == 2
+
+
+def test_publicar_prefere_roteiro_do_sidecar(make_tipo, monkeypatch, tmp_path):
+    from geracao import sidecar as sc
+
+    tipo = make_tipo(config_extra=_youtube_cfg(publicar=True))
+    hist = HistoricoExecucoes(tmp_path / "h.json")
+    monkeypatch.setattr(execucoes, "historico", hist)
+    reg = hist.iniciar(tipo.id, tipo.nome, "tema")
+
+    video = tmp_path / "out" / "video_final.mp4"
+    video.parent.mkdir()
+    video.write_bytes(b"x")
+    # sidecar e roteiro.txt divergem: o handoff deve usar o sidecar.
+    sc.escrever(video.parent, {"roteiro": "roteiro do sidecar"})
+    (video.parent / "roteiro.txt").write_text("roteiro antigo", encoding="utf-8")
+
+    import publicacao.youtube as y
+
+    capturado = {}
+    monkeypatch.setattr(
+        y, "publicar_video", lambda vp, tema, tp, roteiro: capturado.setdefault("r", roteiro) or "u"
+    )
+    execucoes._publicar_se_configurado(reg["id"], "tema", tipo, video)
+    assert capturado["r"] == "roteiro do sidecar"

@@ -8,6 +8,8 @@ import threading
 
 from config.tipos import TipoVideo
 from config.sistema import sistema
+from geracao import sidecar
+from geracao.custo import Ledger
 from geracao.pipeline import gerar_video
 
 _HISTORICO_PATH = Path(__file__).parent.parent / "execucoes" / "historico.json"
@@ -91,6 +93,9 @@ class HistoricoExecucoes:
                 "output_path": None,
                 "log_path": None,
                 "url_publicacao": None,
+                "custo_total": None,
+                "custos": [],
+                "provedores": {},
                 "erro": None,
             }
             execucoes.insert(0, registro)
@@ -112,6 +117,15 @@ class HistoricoExecucoes:
 
     def registrar_publicacao(self, execucao_id: str, url: str) -> dict:
         return self._atualizar(execucao_id, url_publicacao=str(url))
+
+    def registrar_custos(self, execucao_id: str, ledger) -> dict:
+        """Anota no registro o custo/provedor por etapa vindos do Ledger do run."""
+        return self._atualizar(
+            execucao_id,
+            custo_total=round(ledger.total(), 6),
+            custos=ledger.itens(),
+            provedores=ledger.provedores(),
+        )
 
     def concluir(self, execucao_id: str, output_path: Path) -> dict:
         return self._atualizar(
@@ -298,8 +312,13 @@ def _publicar_se_configurado(execucao_id: str, tema: str, tipo: TipoVideo, camin
     from publicacao import youtube
 
     try:
-        roteiro_path = Path(caminho_video).parent / "roteiro.txt"
-        roteiro = roteiro_path.read_text(encoding="utf-8") if roteiro_path.exists() else ""
+        # Handoff pela Geração: o sidecar traz o roteiro; se faltar, cai no roteiro.txt.
+        base = Path(caminho_video).parent
+        registro = sidecar.ler(base) or {}
+        roteiro = registro.get("roteiro")
+        if roteiro is None:
+            roteiro_path = base / "roteiro.txt"
+            roteiro = roteiro_path.read_text(encoding="utf-8") if roteiro_path.exists() else ""
         print("\nPublicando no YouTube...")
         url = youtube.publicar_video(caminho_video, tema, tipo, roteiro)
         historico.registrar_publicacao(execucao_id, url)
@@ -337,8 +356,10 @@ def executar_com_captura(tema: str, tipo: TipoVideo, execucao: dict | None = Non
 
     tee = _TeeStdout(execucao["id"], log_path)
     _proxy.ativar(tee)
+    ledger = Ledger()
     try:
-        caminho = gerar_video(tema=tema, tipo=tipo, output_path=output_path)
+        caminho = gerar_video(tema=tema, tipo=tipo, output_path=output_path, ledger=ledger)
+        historico.registrar_custos(execucao["id"], ledger)
         _publicar_se_configurado(execucao["id"], tema, tipo, caminho)
         historico.concluir(execucao["id"], caminho)
         return caminho
