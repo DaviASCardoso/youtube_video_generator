@@ -130,9 +130,38 @@ SESSION_SECRET=uma_string_longa_e_aleatoria
 
 ⚠️ O login roda sobre HTTP (sem HTTPS na rede local): ele mantém curiosos e outros dispositivos da rede de fora, mas a senha trafega sem criptografia — não é proteção contra alguém que consiga farejar o tráfego da rede. Sem `ADMIN_USER`/`ADMIN_PASSWORD`, o painel fica aberto: qualquer pessoa na mesma rede pode editar configurações, disparar gerações (que consomem cota das APIs pagas) e excluir tipos de vídeo.
 
-## Publicação no YouTube
+## Publicação (por tipo)
 
-O vídeo pronto pode ser publicado automaticamente no YouTube. Cada tipo usa seu **próprio projeto Google Cloud** (um por canal, para isolar a cota de upload — ~6 uploads/dia por projeto), então as credenciais são **por tipo**:
+A Publicação leva o vídeo pronto (o `video_final.mp4` + o `sidecar.json`) até a
+plataforma, tudo editável na aba **Publicação** de cada tipo:
+
+1. **Metadados otimizados por Groq** — o mesmo LLM do roteiro transforma tema + roteiro
+   em título, descrição e tags voltados para clique e busca (o tema **não** é o título).
+   Sempre ligado; tom, moldes e estratégia de tags são configuráveis.
+2. **Thumbnail** (opcional, por tipo) — fundo por IA (FLUX) **ou** banco de imagens
+   (Pexels), com o texto de chamada (gerado por Groq) composto por cima com fonte/cor/
+   posição/contorno configuráveis.
+3. **Destinos plugáveis** — cada destino tem seu liga/desliga e sua credencial isolada;
+   YouTube está ligado, TikTok/Reels/Kwai são costura para depois. Uma credencial
+   expirada/prestes a expirar é **surfada** no painel, não falha calada.
+4. **Timing** — imediato (default) ou agendado (sobe privado e o YouTube publica no
+   horário de go-live configurado, via `publishAt`).
+5. **Visibilidade & disclosure** — privacidade (default public), audiência e a flag de
+   mídia sintética (default ligada).
+6. **Gate de revisão** — auto-publica (default) ou **revisar** (o vídeo espera aprovação
+   no painel antes de ir ao ar).
+7. **Eficiência** — nunca sobe o mesmo vídeo duas vezes (idempotência por
+   published-record), respeita uma **cota diária por credencial** (default 5 uploads/dia,
+   adia o excedente) e não refaz metadados/thumbnail que já existem.
+8. **Observabilidade** — cada publicação registra destino, id, URL, visibilidade e cota
+   no histórico; um destino que falha degrada sozinho, os outros seguem.
+
+Com a config default **nenhum tipo publica** (destino desligado) — igual a hoje. Para
+publicar, ligue o destino YouTube na aba Publicação.
+
+### Credenciais do YouTube
+
+Cada tipo usa seu **próprio projeto Google Cloud** (um por canal, para isolar a cota de upload), então as credenciais são **por tipo**:
 
 - `tipos/<id>/youtube_client_secret.json` — o OAuth client (Desktop app) baixado do projeto daquele canal. Se ausente, cai no `client_secret_youtube.json` da raiz.
 - `tipos/<id>/youtube_token.json` — criado no primeiro consentimento e reusado depois (gitignored).
@@ -142,8 +171,6 @@ O vídeo pronto pode ser publicado automaticamente no YouTube. Cada tipo usa seu
 ```
 python -m publicacao.youtube auth --tipo cetico_pratico
 ```
-
-Depois disso, ligue **"Publicar automaticamente no YouTube após gerar"** na aba Config do tipo. Recomendação: comece com a visibilidade em **`private`** — o vídeo sobe, mas só você vê, e você promove a público manualmente no YouTube Studio. O título vem do tema e a descrição do roteiro + a "descrição base" do config + `#Shorts` + as tags. A URL publicada aparece no histórico de execuções.
 
 Para publicar um vídeo já gerado na mão:
 
@@ -188,6 +215,7 @@ Cada teste é pulado automaticamente se a chave correspondente não estiver no `
 - [x] Suporte a múltiplos tipos de vídeo (agendamento, prompts, voz e fila de temas independentes por tipo)
 - [x] Interface web para controle e monitoramento
 - [x] Publicação no YouTube (com trava por tipo; sobe como privado por padrão)
+- [x] Publicação config-driven por tipo (metadados otimizados por Groq, thumbnail FLUX/Pexels + texto, destinos plugáveis com credencial isolada, agendamento, disclosure, gate de revisão, idempotência e cota diária)
 
 **Futuro**
 - [ ] Análise de desempenho dos vídeos publicados para refinamento automático do pipeline
