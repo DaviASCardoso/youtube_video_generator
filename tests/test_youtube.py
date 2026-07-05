@@ -161,3 +161,132 @@ def test_publicar_video(make_tipo, monkeypatch):
     assert capturado["body"]["snippet"]["title"] == "Meu Tema"
     assert capturado["body"]["status"]["privacyStatus"] == "private"
     assert "olá mundo" in capturado["body"]["snippet"]["description"]
+
+
+# --- montar_corpo (metadados otimizados + opções) ---
+
+_METADADOS = {"titulo": "Título Otimizado", "descricao": "A descrição.", "tags": ["ia", "dev"]}
+
+
+def _opcoes(**extra):
+    base = {
+        "privacidade": "public",
+        "audiencia": "nao_infantil",
+        "categoria_id": "27",
+        "idioma": "pt-BR",
+        "tags_base": ["canal"],
+        "descricao_base": "Inscreva-se!",
+    }
+    base.update(extra)
+    return base
+
+
+def test_montar_corpo_imediato():
+    corpo = y.montar_corpo(_METADADOS, _opcoes())
+    assert corpo["snippet"]["title"] == "Título Otimizado"
+    assert corpo["snippet"]["categoryId"] == "27"
+    assert corpo["snippet"]["defaultLanguage"] == "pt-BR"
+    # tags geradas ∪ tags_base, sem repetir
+    assert corpo["snippet"]["tags"] == ["ia", "dev", "canal"]
+    assert corpo["status"]["privacyStatus"] == "public"
+    assert "publishAt" not in corpo["status"]
+    desc = corpo["snippet"]["description"]
+    assert "A descrição." in desc and "Inscreva-se!" in desc and "#Shorts" in desc
+    assert "#ia" in desc and "#canal" in desc
+
+
+def test_montar_corpo_titulo_cortado():
+    corpo = y.montar_corpo({"titulo": "A" * 200, "descricao": "d", "tags": []}, _opcoes())
+    assert len(corpo["snippet"]["title"]) == y.TITULO_MAX
+
+
+def test_montar_corpo_agendado_forca_privado():
+    corpo = y.montar_corpo(_METADADOS, _opcoes(privacidade="public", publish_at="2026-07-06T18:00:00Z"))
+    assert corpo["status"]["privacyStatus"] == "private"  # publishAt exige privado
+    assert corpo["status"]["publishAt"] == "2026-07-06T18:00:00Z"
+
+
+def test_montar_corpo_audiencia_infantil():
+    corpo = y.montar_corpo(_METADADOS, _opcoes(audiencia="infantil"))
+    assert corpo["status"]["selfDeclaredMadeForKids"] is True
+
+
+# --- subir_video / definir_thumbnail ---
+
+class _FakeReq:
+    def next_chunk(self):
+        return (None, {"id": "VID9"})
+
+
+def _fake_servico(capturado):
+    class _Videos:
+        def insert(self, part, body, media_body):
+            capturado["insert"] = {"part": part, "body": body}
+            return _FakeReq()
+
+    class _Thumbs:
+        def set(self, videoId, media_body):
+            capturado["thumb"] = videoId
+            return SimpleNamespace(execute=lambda: {"items": []})
+
+    class _Servico:
+        def videos(self):
+            return _Videos()
+
+        def thumbnails(self):
+            return _Thumbs()
+
+    return _Servico()
+
+
+def test_subir_video(make_tipo, monkeypatch):
+    tipo = make_tipo()
+    capturado = {}
+    monkeypatch.setattr(y, "_servico", lambda tipo, permitir_consentimento=False: _fake_servico(capturado))
+    monkeypatch.setattr(y, "MediaFileUpload", lambda *a, **k: object())
+    vid = y.subir_video(tipo, "v.mp4", {"snippet": {"title": "t"}, "status": {}})
+    assert vid == "VID9"
+    assert capturado["insert"]["part"] == "snippet,status"
+
+
+def test_definir_thumbnail(make_tipo, monkeypatch):
+    tipo = make_tipo()
+    capturado = {}
+    monkeypatch.setattr(y, "_servico", lambda tipo, permitir_consentimento=False: _fake_servico(capturado))
+    monkeypatch.setattr(y, "MediaFileUpload", lambda *a, **k: object())
+    y.definir_thumbnail(tipo, "VID9", "thumb.png")
+    assert capturado["thumb"] == "VID9"
+
+
+# --- checar_credencial ---
+
+def test_checar_credencial_ausente(make_tipo):
+    tipo = make_tipo()  # sem youtube_token.json
+    assert y.checar_credencial(tipo)["status"] == "ausente"
+
+
+def test_checar_credencial_expirado(make_tipo, monkeypatch):
+    tipo = make_tipo()
+    y._caminho_token(tipo).write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(y, "autenticar", lambda tipo: (_ for _ in ()).throw(RuntimeError("token morto")))
+    assert y.checar_credencial(tipo)["status"] == "expirado"
+
+
+def test_checar_credencial_valido(make_tipo, monkeypatch):
+    tipo = make_tipo()
+    y._caminho_token(tipo).write_text("{}", encoding="utf-8")  # recém-criado -> jovem
+    monkeypatch.setattr(y, "autenticar", lambda tipo: object())
+    assert y.checar_credencial(tipo)["status"] == "valido"
+
+
+def test_checar_credencial_expirando(make_tipo, monkeypatch):
+    import os
+    import time as _t
+
+    tipo = make_tipo()
+    token = y._caminho_token(tipo)
+    token.write_text("{}", encoding="utf-8")
+    antigo = _t.time() - 7 * 86400  # 7 dias atrás
+    os.utime(token, (antigo, antigo))
+    monkeypatch.setattr(y, "autenticar", lambda tipo: object())
+    assert y.checar_credencial(tipo)["status"] == "expirando"

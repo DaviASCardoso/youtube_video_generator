@@ -17,6 +17,7 @@ clássica de automação que "para sozinha"). Ponha o app em "In production" no
 console para tokens duráveis; se expirar, rode 'auth' de novo.
 """
 
+import time
 from pathlib import Path
 
 from google.auth.transport.requests import Request
@@ -39,6 +40,13 @@ _CLIENT_SECRET_RAIZ = _RAIZ / "client_secret_youtube.json"
 
 TITULO_MAX = 100   # limite do YouTube para o título
 DESCRICAO_MAX = 5000  # limite do YouTube para a descrição
+
+# Custo em cota de um videos.insert (unidades da API; ~1600 das 10000 diárias).
+QUOTA_UPLOAD = 1600
+
+# Proxy do limite de ~7 dias do refresh token em apps OAuth no modo "Testing":
+# quando o token passa disto, avisamos que está prestes a expirar.
+DIAS_ALERTA_TOKEN = 6
 
 
 def _caminho_client_secret(tipo: TipoVideo) -> Path:
@@ -153,21 +161,61 @@ def _montar_metadados(tema: str, roteiro: str, config) -> dict:
     }
 
 
-def publicar_video(video_path, tema: str, tipo: TipoVideo, roteiro: str = "") -> str:
-    """Sobe um vídeo já gerado para o canal do tipo e devolve a URL pública.
+def montar_corpo(metadados: dict, opcoes: dict) -> dict:
+    """Monta o corpo de `videos.insert` a partir de metadados **já otimizados** (do
+    passo Groq) e das opções de publicação do run.
 
     Args:
-        video_path: Caminho do video_final.mp4.
-        tema: Tema do vídeo (vira o título).
-        tipo: Tipo de vídeo (config + credenciais).
-        roteiro: Texto do roteiro (entra na descrição). Opcional.
+        metadados: {titulo, descricao, tags} vindos de `publicacao.metadados`.
+        opcoes: {privacidade, audiencia, disclosure_sintetico, publish_at,
+            categoria_id, idioma, tags_base, descricao_base}.
 
-    Returns:
-        URL curta do vídeo (https://youtu.be/<id>).
+    Regras: título cortado no limite; tags = geradas ∪ tags_base (sem repetir);
+    descrição = descrição otimizada + descrição-base + rodapé de hashtags; `publish_at`
+    (ISO-8601) força `privacyStatus=private` (a plataforma torna público no horário).
     """
-    servico = _servico(tipo)
-    corpo = _montar_metadados(tema, roteiro, tipo.config)
+    titulo = str(metadados.get("titulo", "")).strip()[:TITULO_MAX]
 
+    tags = list(dict.fromkeys([*metadados.get("tags", []), *opcoes.get("tags_base", [])]))
+
+    partes = []
+    descricao = str(metadados.get("descricao", "")).strip()
+    if descricao:
+        partes.append(descricao)
+    base = opcoes.get("descricao_base", "")
+    if base and base.strip():
+        partes.append(base.strip())
+    hashtags = " ".join(f"#{t.replace(' ', '')}" for t in tags)
+    partes.append("#Shorts" + (f" {hashtags}" if hashtags else ""))
+    descricao_final = "\n\n".join(partes)[:DESCRICAO_MAX]
+
+    status = {
+        "privacyStatus": opcoes.get("privacidade", "public"),
+        "selfDeclaredMadeForKids": opcoes.get("audiencia") == "infantil",
+    }
+    publish_at = opcoes.get("publish_at")
+    if publish_at:
+        # publishAt exige o vídeo privado; o YouTube o torna público no horário.
+        status["privacyStatus"] = "private"
+        status["publishAt"] = publish_at
+
+    snippet = {
+        "title": titulo,
+        "description": descricao_final,
+        "tags": tags,
+        "categoryId": opcoes.get("categoria_id", "22"),
+    }
+    if opcoes.get("idioma"):
+        snippet["defaultLanguage"] = opcoes["idioma"]
+        snippet["defaultAudioLanguage"] = opcoes["idioma"]
+
+    return {"snippet": snippet, "status": status}
+
+
+def subir_video(tipo: TipoVideo, video_path, corpo: dict) -> str:
+    """Faz o upload resumível de um vídeo com um corpo `videos.insert` já montado e
+    devolve o id do vídeo publicado."""
+    servico = _servico(tipo)
     media = MediaFileUpload(str(video_path), mimetype="video/mp4", resumable=True)
     requisicao = servico.videos().insert(part="snippet,status", body=corpo, media_body=media)
 
@@ -176,8 +224,55 @@ def publicar_video(video_path, tema: str, tipo: TipoVideo, roteiro: str = "") ->
         status, resposta = requisicao.next_chunk()
         if status:
             print(f"    [youtube] upload {int(status.progress() * 100)}%")
+    return resposta["id"]
 
-    url = f"https://youtu.be/{resposta['id']}"
+
+def definir_thumbnail(tipo: TipoVideo, video_id: str, caminho) -> None:
+    """Define a thumbnail de um vídeo já publicado (thumbnails.set)."""
+    servico = _servico(tipo)
+    media = MediaFileUpload(str(caminho), mimetype="image/png")
+    servico.thumbnails().set(videoId=video_id, media_body=media).execute()
+    print(f"    [youtube] thumbnail definida para {video_id}")
+
+
+def checar_credencial(tipo: TipoVideo) -> dict:
+    """Verifica a credencial do tipo sem publicar, para a Publicação surfacar um token
+    expirado/prestes a expirar em vez de falhar silenciosamente.
+
+    Returns:
+        {"status": "valido"|"expirando"|"expirado"|"ausente", "detalhe": str}.
+        O caso "expirando" usa a idade do arquivo de token como proxy do limite de
+        ~7 dias do refresh token em apps OAuth no modo "Testing".
+    """
+    token_path = _caminho_token(tipo)
+    if not token_path.exists():
+        return {"status": "ausente", "detalhe": "sem youtube_token.json (rode o comando auth)"}
+    try:
+        autenticar(tipo)  # renova se preciso; não publica nada
+    except Exception as e:  # noqa: BLE001
+        return {"status": "expirado", "detalhe": str(e)}
+
+    idade_dias = (time.time() - token_path.stat().st_mtime) / 86400
+    if idade_dias >= DIAS_ALERTA_TOKEN:
+        return {
+            "status": "expirando",
+            "detalhe": f"token com ~{idade_dias:.0f} dias (limite ~7 no modo Testing — reautentique)",
+        }
+    return {"status": "valido", "detalhe": ""}
+
+
+def publicar_video(video_path, tema: str, tipo: TipoVideo, roteiro: str = "") -> str:
+    """Sobe um vídeo já gerado para o canal do tipo e devolve a URL pública.
+
+    Caminho legado (título = tema, sem otimização) mantido para o CLI/testes; o fluxo
+    do pilar usa `montar_corpo` + `subir_video` com metadados otimizados.
+
+    Returns:
+        URL curta do vídeo (https://youtu.be/<id>).
+    """
+    corpo = _montar_metadados(tema, roteiro, tipo.config)
+    video_id = subir_video(tipo, video_path, corpo)
+    url = f"https://youtu.be/{video_id}"
     print(f"    [youtube] publicado: {url}")
     return url
 
