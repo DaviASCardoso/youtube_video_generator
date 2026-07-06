@@ -32,6 +32,12 @@ _SUFIXO_DESCOBERTA = "__descoberta"
 _ID_SAUDE = "__saude__"
 _INTERVALO_SAUDE_HORAS = 6
 
+# Job global do Feedback: ingere métricas (na agenda de maturação) e processa
+# (findings + propostas) por tipo ativo. Inerte por default (destino de analytics
+# desligado ⇒ nada é puxado nem proposto).
+_ID_FEEDBACK = "__feedback__"
+_INTERVALO_FEEDBACK_HORAS = 24
+
 # Base de referência (uma segunda-feira, dia 1) para calcular o horário deslocado
 # "X horas antes" da geração, resolvendo viradas de dia/semana corretamente.
 _BASE_REF = datetime(2024, 1, 1)  # 2024-01-01 é uma segunda-feira
@@ -145,6 +151,20 @@ def _job_saude() -> None:
         saude.verificar_e_alertar()
     except Exception as e:  # noqa: BLE001
         print(f"[saude] falha no check periódico: {e}")
+
+
+def _job_feedback() -> None:
+    """Passada diária do Feedback: por tipo ativo, ingere métricas e processa findings/
+    propostas. Degrada por tipo (uma falha não interrompe os demais) e é inerte quando o
+    destino de analytics está desligado."""
+    from feedback import ingestao, feedback as orquestrador
+
+    for tipo in listar_tipos_ativos():
+        try:
+            ingestao.ingerir(tipo)
+            orquestrador.processar(tipo)
+        except Exception as e:  # noqa: BLE001
+            print(f"[feedback] falha ao processar '{tipo.id}': {e}")
 
 
 def registrar_job(tipo: TipoVideo) -> None:
@@ -324,6 +344,13 @@ def iniciar() -> None:
         trigger="interval",
         hours=_INTERVALO_SAUDE_HORAS,
         id=_ID_SAUDE,
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _job_feedback,
+        trigger="interval",
+        hours=_INTERVALO_FEEDBACK_HORAS,
+        id=_ID_FEEDBACK,
         replace_existing=True,
     )
     scheduler.start()

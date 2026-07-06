@@ -199,3 +199,42 @@ def test_cancelar_pede_cancelamento(monkeypatch):
     monkeypatch.setattr(sched, "solicitar_cancelamento", lambda eid: chamado.append(eid))
     sched.cancelar("EXEC-9")
     assert chamado == ["EXEC-9"]
+
+
+# --- _job_feedback (ingestão + processamento por tipo ativo) ---
+
+
+def test_job_feedback_processa_cada_tipo_ativo(make_tipo, monkeypatch):
+    from feedback import ingestao
+    from feedback import feedback as orq
+
+    t1 = make_tipo("t1")
+    t2 = make_tipo("t2")
+    monkeypatch.setattr(sched, "listar_tipos_ativos", lambda: [t1, t2])
+    ingeridos, processados = [], []
+    monkeypatch.setattr(ingestao, "ingerir", lambda tipo: ingeridos.append(tipo.id))
+    monkeypatch.setattr(orq, "processar", lambda tipo: processados.append(tipo.id))
+
+    sched._job_feedback()
+    assert ingeridos == ["t1", "t2"]
+    assert processados == ["t1", "t2"]
+
+
+def test_job_feedback_degrada_por_tipo(make_tipo, monkeypatch):
+    from feedback import ingestao
+    from feedback import feedback as orq
+
+    t1 = make_tipo("t1")
+    t2 = make_tipo("t2")
+    monkeypatch.setattr(sched, "listar_tipos_ativos", lambda: [t1, t2])
+
+    def _ingerir(tipo):
+        if tipo.id == "t1":
+            raise RuntimeError("estourou t1")
+
+    processados = []
+    monkeypatch.setattr(ingestao, "ingerir", _ingerir)
+    monkeypatch.setattr(orq, "processar", lambda tipo: processados.append(tipo.id))
+
+    sched._job_feedback()  # não levanta
+    assert processados == ["t2"]  # t1 falhou na ingestão, t2 seguiu
