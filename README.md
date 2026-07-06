@@ -8,7 +8,7 @@ Pipeline 100% automatizado para geração e publicação periódica de vídeos l
 
 O sistema suporta múltiplos **tipos de vídeo** rodando lado a lado (ex: canais ou personas diferentes), cada um com seu próprio agendamento, prompts, voz, configurações de geração, descoberta de temas e pool de ideias. Cada tipo vive em sua própria pasta dentro de `tipos/`.
 
-Um **painel web** (`uvicorn api.app:app`) permite controlar tudo isso sem editar arquivos JSON ou rodar scripts manualmente: criar/editar/duplicar/renomear/excluir tipos, editar prompts e configurações com validação, ajustar a descoberta e o pool de ideias, disparar execuções manuais e acompanhar logs ao vivo e o histórico de execuções.
+Um **painel web** (`uvicorn api.app:app`) permite controlar tudo isso sem editar arquivos JSON ou rodar scripts manualmente: criar/editar/duplicar/renomear/excluir tipos, editar prompts e todas as configurações (os formulários são **gerados a partir do schema** de cada pilar — um knob novo aparece sozinho), ajustar a descoberta e o pool de ideias, disparar execuções (pipeline completo ou só descoberta), **cancelar** um run, aprovar temas/vídeos num **gate de aprovação** unificado, ver um **painel de saúde/custo/cota** e receber **notificações no celular** (ntfy) — além de acompanhar logs ao vivo e o histórico.
 
 ## Arquitetura: os sete pilares
 
@@ -19,7 +19,7 @@ O sistema é organizado em **sete pilares**, cada um com uma responsabilidade cl
 | **Descoberta** | Decidir o que fazer: reunir sinais de várias fontes, avaliar fit, deduplicar e decidir **um único tema** por tipo a cada ciclo. | `descoberta/` |
 | **Geração** | Transformar o tema no artefato de mídia final: roteiro, imagens, narração e montagem do vídeo. | `geracao/` |
 | **Publicação** | Levar o artefato até a plataforma: metadados, upload, visibilidade. | `publicacao/` |
-| **Controle** | Superfície humana: painel web, camadas de configuração, histórico e logs. | `api/` + `config/` |
+| **Controle** | Superfície humana **fina e schema-driven**: painel web (config, disparo, aprovação, dashboard, notificações), camadas de configuração, histórico e logs. | `api/` + `config/` |
 | **Feedback** | Fechar o ciclo com o desempenho real: analytics → entradas que os produziram. | `feedback/` *(placeholder)* |
 | **Operações** | Rodar sem supervisão: agendamento, orquestração, erros, segredos, custo. *(transversal)* | `operacoes/` |
 | **Conformidade** | Ficar dentro das regras da plataforma: divulgação de mídia sintética, autenticidade. | `conformidade/` *(placeholder)* |
@@ -179,6 +179,16 @@ python -m publicacao.youtube publicar caminho/para/video_final.mp4 --tipo cetico
 ```
 
 ⚠️ **Gotcha dos 7 dias:** enquanto o app OAuth estiver em modo **"Testing"** no Google Console, o token expira em 7 dias e a publicação para de funcionar. Ponha o app em **"In production"** (aceitando a tela de "app não verificado" no consentimento único) para tokens duráveis. Se o token expirar, rode o comando `auth` de novo.
+
+## Controle (o painel)
+
+O painel é a superfície humana (Pilar 4 — spec `PILAR_4_CONTROLE.md`, detalhes em `api/README.md`). Ele **não** tem lógica própria: renderiza formulários a partir do schema de cada pilar e views a partir dos records que eles gravam.
+
+- **Formulários gerados por schema** — todas as abas de config (Config, Descoberta, Geração, Publicação), as Configurações globais e a aba Notificações são desenhadas por `api/formulario.py` a partir do dict de defaults do pilar + um mapa `UI_HINTS`. Cada campo mostra seu default e marca quando você o sobrescreveu; um knob novo no pilar aparece no painel sem mexer no Controle.
+- **Gate de aprovação** (`/aprovacoes`) — junta num lugar só os temas decididos em modo revisão (Descoberta) e os vídeos prontos aguardando publicação (Publicação), com aprovar / rejeitar / editar.
+- **Painel de saúde/custo/cota** (no topo de Execuções) — scheduler rodando?, disco livre, gasto do dia, status das credenciais, cota/orçamento por tipo, último publish, e se o login e o ntfy estão configurados. Só lê sinais; não força nada.
+- **Disparo e cancelamento** — dispare o pipeline completo, **só a descoberta** (decide o tema sem gerar), reexecute retomando do checkpoint, ou **cancele** um run em andamento (o cancelamento é cooperativo: para na próxima fronteira de estágio).
+- **Notificações no celular (ntfy)** — aba **Notificações** nas Configurações. O ntfy é um pub-sub HTTP grátis: um POST num tópico chega no app do celular, sem conta nem chave no servidor público. Configure `NTFY_SERVER` (default `https://ntfy.sh`), `NTFY_TOPIC` (escolha algo **impossível de adivinhar** — no servidor público ele funciona como senha) e, opcional, `NTFY_TOKEN` no `.env`; os liga/desliga por evento, a prioridade e as horas de silêncio ficam no painel. A política default é **silenciosa** (o interruptor geral vem desligado); ao ligar, só o que pede atenção avisa em prioridade alta — run que falhou, credencial expirando, cota/disco no limite, scheduler parado, item na fila de aprovação —, enquanto sucessos de rotina ficam desligados (o tier grátis é 250 msgs/dia). Há um botão de teste. Sem `NTFY_TOPIC`, nada é enviado.
 
 ## Testes
 
