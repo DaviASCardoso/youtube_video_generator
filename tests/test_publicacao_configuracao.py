@@ -1,4 +1,53 @@
-from publicacao.configuracao import PUBLICACAO_PADRAO, mesclar_publicacao
+from api import formulario
+from api.schemas import PublicacaoConfig
+from publicacao.configuracao import PUBLICACAO_PADRAO, UI_HINTS, mesclar_publicacao
+
+
+def _paths(padrao, prefixo=""):
+    out = set()
+    for chave, val in padrao.items():
+        path = f"{prefixo}.{chave}" if prefixo else chave
+        out.add(path)
+        if isinstance(val, dict):
+            out |= _paths(val, path)
+    return out
+
+
+def test_ui_hints_apontam_para_paths_reais():
+    assert not (set(UI_HINTS) - _paths(PUBLICACAO_PADRAO))
+
+
+def test_ui_hints_opcoes_batem_com_default():
+    for path, hint in UI_HINTS.items():
+        if "opcoes" not in hint:
+            continue
+        val = PUBLICACAO_PADRAO
+        for p in path.split("."):
+            val = val[p]
+        if not isinstance(val, dict):
+            assert val in hint["opcoes"], f"{path}: {val!r} fora de {hint['opcoes']}"
+
+
+def test_parity_publicacao_default_roundtrip():
+    itens = formulario.arvore(PUBLICACAO_PADRAO, PUBLICACAO_PADRAO, UI_HINTS)
+
+    def flat(itens, out):
+        for it in itens:
+            if it.kind == "grupo":
+                flat(it.itens, out)
+            elif it.tipo == "checkbox":
+                if it.valor:
+                    out[it.nome] = "on"
+            elif it.tipo == "lista":
+                out[it.nome] = "\n".join(str(x) for x in it.valor)
+            elif it.valor is None:
+                out[it.nome] = ""
+            else:
+                out[it.nome] = str(it.valor)
+        return out
+
+    recon = formulario.reagrupar(flat(itens, {}), PUBLICACAO_PADRAO, UI_HINTS)
+    assert PublicacaoConfig(**recon).model_dump() == PUBLICACAO_PADRAO
 
 
 def test_mesclar_none_devolve_padrao():

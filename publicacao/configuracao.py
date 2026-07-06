@@ -19,6 +19,8 @@ preservando o comportamento (quem não publicava, segue não publicando).
 
 import copy
 
+from config.constantes import VISIBILIDADES
+
 # --- Enums (importados pelo Controle para validar os formulários) -----------
 
 # Gate de revisão: auto publica; revisar segura para aprovação humana.
@@ -93,6 +95,51 @@ PUBLICACAO_PADRAO = {
             "descricao_base": "",  # rodapé fixo da descrição
         },
     },
+}
+
+
+# --- Dicas de UI (consumidas pelo motor de formulário do Controle) ----------
+
+UI_HINTS = {
+    "revisao": {
+        "rotulo": "Como publicar", "opcoes": MODOS_REVISAO_PUB,
+        "rotulos_opcoes": {"auto": "auto (publica sozinho)", "revisar": "revisar (aguarda aprovação)"},
+    },
+    "timing": {"rotulo": "Quando publicar"},
+    "timing.modo": {"rotulo": "Timing", "opcoes": MODOS_TIMING},
+    "timing.horario": {"rotulo": "Horário de go-live (quando agendado, HH:MM)"},
+    "timing.fuso_horario": {"rotulo": "Fuso horário"},
+    "visibilidade": {"rotulo": "Visibilidade & disclosure"},
+    "visibilidade.privacidade": {"rotulo": "Privacidade", "opcoes": VISIBILIDADES},
+    "visibilidade.audiencia": {"rotulo": "Audiência", "opcoes": AUDIENCIAS},
+    "visibilidade.disclosure_sintetico": {"rotulo": "Declarar mídia sintética (obrigatório desde jan/2026)"},
+    "metadados": {"rotulo": "Metadados (motor: Groq, fixo)", "ajuda": "A persona/base do prompt vive na aba Prompts (system_prompt_metadados.txt)."},
+    "metadados.tom": {"rotulo": "Tom (vazio = persona do prompt)"},
+    "metadados.template_titulo": {"rotulo": "Molde de título (opcional)"},
+    "metadados.template_descricao": {"rotulo": "Molde de descrição (opcional)"},
+    "metadados.estrategia_tags": {"rotulo": "Estratégia de tags", "opcoes": ESTRATEGIAS_TAGS},
+    "metadados.max_tags": {"rotulo": "Máx. de tags (0–50)", "min": 0, "max": 50},
+    "thumbnail": {"rotulo": "Thumbnail"},
+    "thumbnail.ativo": {"rotulo": "Gerar thumbnail (importa pouco em short-form)"},
+    "thumbnail.fonte_fundo": {"rotulo": "Fonte do fundo", "opcoes": FONTES_FUNDO_THUMB},
+    "thumbnail.texto": {"rotulo": "Texto"},
+    "thumbnail.texto.fonte": {"rotulo": "Fonte do texto (.ttf — vazio = padrão)"},
+    "thumbnail.texto.tamanho": {"rotulo": "Tamanho do texto (8–400)", "min": 8, "max": 400},
+    "thumbnail.texto.cor": {"rotulo": "Cor do texto (hex)"},
+    "thumbnail.texto.posicao": {"rotulo": "Posição", "opcoes": POSICOES_TEXTO_THUMB},
+    "thumbnail.texto.contorno_cor": {"rotulo": "Cor do contorno (hex)"},
+    "thumbnail.texto.contorno_largura": {"rotulo": "Largura do contorno (0–40)", "min": 0, "max": 40},
+    "quota": {"rotulo": "Cota"},
+    "quota.cap_diario": {"rotulo": "Máx. de uploads por dia por credencial (0 = sem limite)", "min": 0, "max": 1000},
+    "quota.acao": {"rotulo": "Ao atingir", "opcoes": ACOES_QUOTA},
+    "destinos": {"rotulo": "Destinos"},
+    "destinos.youtube": {"rotulo": "Destino: YouTube", "ajuda": "Credencial por tipo em tipos/<id>/youtube_token.json (isola a cota do canal)."},
+    "destinos.youtube.ativo": {"rotulo": "Publicar no YouTube"},
+    "destinos.youtube.categoria_id": {"rotulo": "Categoria (id numérico)"},
+    "destinos.youtube.idioma": {"rotulo": "Idioma (ex: pt-BR)"},
+    "destinos.youtube.playlist": {"rotulo": "Playlist (id — opcional)"},
+    "destinos.youtube.tags_base": {"rotulo": "Tags fixas (uma por linha)"},
+    "destinos.youtube.descricao_base": {"rotulo": "Rodapé fixo da descrição", "multilinha": True},
 }
 
 
