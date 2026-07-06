@@ -6,6 +6,7 @@ from api import formulario
 from api.schemas import TipoConfig
 from api.templating import templates
 from descoberta.configuracao import mesclar_descoberta
+from feedback.configuracao import mesclar_feedback
 from geracao.configuracao import mesclar_geracao
 from publicacao.configuracao import mesclar_publicacao
 from operacoes import scheduler as scheduler_mod
@@ -32,7 +33,7 @@ router = APIRouter(prefix="/tipos", tags=["tipos"])
 
 # A aba Config edita nome/ativo + os blocos não-pilar do config.json. Os blocos de
 # pilar (descoberta/geracao/publicacao) têm abas próprias e são preservados no salvar.
-_BLOCOS_PILAR = ("descoberta", "geracao", "publicacao")
+_BLOCOS_PILAR = ("descoberta", "geracao", "publicacao", "feedback")
 CONFIG_TAB_PADRAO = {
     "nome": "",
     "ativo": False,
@@ -231,6 +232,7 @@ async def salvar_config(id: str, request: Request):
     dados["descoberta"] = mesclar_descoberta(atual.get("descoberta"))
     dados["geracao"] = mesclar_geracao(atual.get("geracao"))
     dados["publicacao"] = mesclar_publicacao(atual.get("publicacao"), atual.get("youtube"))
+    dados["feedback"] = mesclar_feedback(atual.get("feedback"))
 
     try:
         validado = TipoConfig(**dados)

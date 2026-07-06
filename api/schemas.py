@@ -9,6 +9,11 @@ from descoberta.configuracao import (
     POLITICAS_RETENCAO,
     REDDIT_PERIODOS,
 )
+from feedback.configuracao import (
+    DIMENSOES,
+    METRICAS_DISPONIVEIS,
+    MODOS_APLICACAO,
+)
 from geracao.compositor import POSICOES
 from geracao.configuracao import (
     ACOES_ORCAMENTO,
@@ -515,6 +520,82 @@ class PublicacaoConfig(BaseModel):
         return v
 
 
+class MetricasFeedbackConfig(BaseModel):
+    ingeridas: list[str] = Field(default_factory=list)
+    headline: list[str] = Field(default_factory=list)
+
+    @field_validator("ingeridas", "headline")
+    @classmethod
+    def _validar_metricas(cls, v):
+        for m in v:
+            if m not in METRICAS_DISPONIVEIS:
+                raise ValueError(f"métrica inválida: '{m}' (use {', '.join(METRICAS_DISPONIVEIS)})")
+        return v
+
+
+class AplicacaoFeedbackConfig(BaseModel):
+    descoberta: str
+    geracao: str
+    publicacao: str
+
+    @field_validator("descoberta", "geracao", "publicacao")
+    @classmethod
+    def _validar_modo(cls, v):
+        if v not in MODOS_APLICACAO:
+            raise ValueError(f"modo deve ser um de: {', '.join(MODOS_APLICACAO)}")
+        return v
+
+
+class CapsNumericosConfig(BaseModel):
+    max_delta_frac: float = Field(ge=0.0, le=1.0)
+    max_delta_min: int = Field(ge=0, le=720)
+
+
+class GuiaFeedbackConfig(BaseModel):
+    top_k: int = Field(ge=1, le=50)
+    tamanho_max_chars: int = Field(ge=0, le=5000)
+    decaimento_dias: int = Field(ge=1, le=365)
+
+
+class ExperimentosFeedbackConfig(BaseModel):
+    ativo: bool
+
+
+class DestinoAnalyticsYoutubeConfig(BaseModel):
+    ativo: bool
+
+
+class DestinosFeedbackConfig(BaseModel):
+    youtube: DestinoAnalyticsYoutubeConfig
+
+
+class FeedbackConfig(BaseModel):
+    metricas: MetricasFeedbackConfig
+    repoll_horas: list[int] = Field(default_factory=list)
+    sample_floor: int = Field(ge=1, le=100)
+    dimensoes: list[str] = Field(default_factory=list)
+    aplicacao: AplicacaoFeedbackConfig
+    caps_numericos: CapsNumericosConfig
+    guia: GuiaFeedbackConfig
+    experimentos: ExperimentosFeedbackConfig
+    destinos: DestinosFeedbackConfig
+
+    @field_validator("repoll_horas")
+    @classmethod
+    def _validar_repoll(cls, v):
+        if any(h <= 0 for h in v):
+            raise ValueError("repoll_horas deve conter apenas horas positivas")
+        return v
+
+    @field_validator("dimensoes")
+    @classmethod
+    def _validar_dimensoes(cls, v):
+        for d in v:
+            if d not in DIMENSOES:
+                raise ValueError(f"dimensão inválida: '{d}' (use {', '.join(DIMENSOES)})")
+        return v
+
+
 class TipoConfig(BaseModel):
     nome: str = Field(min_length=1)
     ativo: bool
@@ -528,6 +609,7 @@ class TipoConfig(BaseModel):
     descoberta: DescobertaConfig
     geracao: GeracaoConfig
     publicacao: PublicacaoConfig
+    feedback: FeedbackConfig
 
 
 class CriarTipoForm(BaseModel):

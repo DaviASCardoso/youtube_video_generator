@@ -7,6 +7,7 @@ import unicodedata
 from config.settings import Config
 from descoberta.configuracao import DESCOBERTA_PADRAO
 from descoberta.temas import FilaDeTemas
+from feedback.configuracao import FEEDBACK_PADRAO
 from geracao.configuracao import GERACAO_PADRAO
 from publicacao.configuracao import PUBLICACAO_PADRAO
 
@@ -39,6 +40,7 @@ DEFAULT_CONFIG = {
     "descoberta": DESCOBERTA_PADRAO,
     "geracao": GERACAO_PADRAO,
     "publicacao": PUBLICACAO_PADRAO,
+    "feedback": FEEDBACK_PADRAO,
 }
 
 ASSETS_PADRAO = (
