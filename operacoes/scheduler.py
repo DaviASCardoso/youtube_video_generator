@@ -8,6 +8,7 @@ from apscheduler.jobstores.base import JobLookupError
 
 from config.tipos import TipoVideo, listar_tipos_ativos, carregar_tipo
 from config.sistema import sistema
+from operacoes import saude
 from descoberta import estado
 from descoberta.configuracao import mesclar_descoberta
 from descoberta.descoberta import decidir_tema
@@ -25,6 +26,10 @@ scheduler = BackgroundScheduler(
 
 # Sufixo do id do job de descoberta de um tipo (o job de geração usa o id do tipo).
 _SUFIXO_DESCOBERTA = "__descoberta"
+
+# Job global de saúde: alerta (ntfy) sobre disco baixo / credencial expirando.
+_ID_SAUDE = "__saude__"
+_INTERVALO_SAUDE_HORAS = 6
 
 # Base de referência (uma segunda-feira, dia 1) para calcular o horário deslocado
 # "X horas antes" da geração, resolvendo viradas de dia/semana corretamente.
@@ -131,6 +136,14 @@ def _job_reservado(tipo_id: str, tema: str, execucao: dict, output_path=None) ->
 
 def _job_publicar(execucao_id: str) -> None:
     publicar_execucao(execucao_id)
+
+
+def _job_saude() -> None:
+    """Check periódico de saúde: emite ntfy para disco baixo / credencial expirando."""
+    try:
+        saude.verificar_e_alertar()
+    except Exception as e:  # noqa: BLE001
+        print(f"[saude] falha no check periódico: {e}")
 
 
 def registrar_job(tipo: TipoVideo) -> None:
@@ -284,6 +297,13 @@ def atualizar_max_simultaneo(max_simultaneo: int) -> None:
 def iniciar() -> None:
     for tipo in listar_tipos_ativos():
         registrar_job(tipo)
+    scheduler.add_job(
+        _job_saude,
+        trigger="interval",
+        hours=_INTERVALO_SAUDE_HORAS,
+        id=_ID_SAUDE,
+        replace_existing=True,
+    )
     scheduler.start()
 
 
