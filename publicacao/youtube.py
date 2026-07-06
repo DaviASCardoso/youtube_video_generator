@@ -29,10 +29,13 @@ from googleapiclient.http import MediaFileUpload
 from config.tipos import TipoVideo, carregar_tipo
 
 # Escopos: upload (a função) + readonly (para a verificação não-destrutiva
-# channels.list mine=true, que confirma qual canal foi autenticado).
+# channels.list mine=true, que confirma qual canal foi autenticado) +
+# yt-analytics.readonly (Pilar 5: o Feedback puxa as métricas do canal reusando
+# esta mesma credencial — nenhum segredo novo, só reconsentir uma vez).
 ESCOPOS = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]
 
 _RAIZ = Path(__file__).parent.parent
