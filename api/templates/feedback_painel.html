@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block titulo %}Feedback{% endblock %}
+{% block conteudo %}
+<h1>Feedback</h1>
+<p><small>
+  O que o laço de aprendizado mediu e propôs. A ingestão é <strong>inerte</strong> até
+  ligar um destino de analytics na aba Feedback do tipo; as propostas são
+  <strong>advisory</strong> — nada entra sem você aprovar aqui.
+</small></p>
+
+{% if not tipos %}
+<p>Nenhum tipo de vídeo cadastrado.</p>
+{% else %}
+
+<form method="get" action="/feedback" style="margin-bottom:1rem">
+  <label>
+    <span class="rotulo">Tipo de vídeo</span>
+    <select name="tipo" onchange="this.form.submit()">
+      {% for t in tipos %}
+      <option value="{{ t.id }}" {{ 'selected' if t.id == tipo.id else '' }}>{{ t.nome }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+<!-- Propostas pendentes -->
+<section style="margin-bottom:2rem">
+  <h2>Propostas aguardando aprovação</h2>
+  {% if propostas %}
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr><th>Tipo</th><th>Alvo</th><th>Mudança</th><th>Dimensão / achado</th><th></th></tr></thead>
+    <tbody>
+      {% for p in propostas %}
+      <tr>
+        <td><span class="badge">{{ p.tipo }}</span></td>
+        <td><code>{{ p.alvo }}</code></td>
+        <td>
+          {% if p.tipo == 'guia' %}
+            <details><summary>{{ p.linhas_novas|length }} diretriz(es)</summary>
+              <ul>{% for l in p.linhas_novas %}<li>{{ l }}</li>{% endfor %}</ul>
+            </details>
+          {% else %}
+            {{ p.valor_atual }} → <strong>{{ p.valor_novo }}</strong>
+          {% endif %}
+        </td>
+        <td><small>{{ p.dimensao }}
+          {% if p.finding %}(efeito {{ p.finding.efeito }} em {{ p.finding.metrica }}, n={{ p.finding.n }}){% endif %}
+        </small></td>
+        <td style="white-space:nowrap">
+          <form method="post" action="/feedback/{{ tipo.id }}/propostas/{{ p.id }}/aprovar" style="display:inline">
+            <button type="submit">Aprovar</button>
+          </form>
+          <form method="post" action="/feedback/{{ tipo.id }}/propostas/{{ p.id }}/rejeitar" style="display:inline">
+            <button type="submit" class="secundario">Rejeitar</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p><small>Nenhuma proposta pendente.</small></p>
+  {% endif %}
+</section>
+
+<!-- Findings -->
+<section style="margin-bottom:2rem">
+  <h2>Findings por dimensão</h2>
+  {% if findings %}
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr><th>Dimensão</th><th>Valor</th><th>Efeito</th><th>Média / baseline</th><th>n</th><th>Confiança</th><th></th></tr></thead>
+    <tbody>
+      {% for f in findings %}
+      <tr>
+        <td>{{ f.dimensao }}</td>
+        <td>{{ f.valor if f.valor is not none else '(textual)' }}</td>
+        <td style="color:{{ '#2a7' if f.efeito > 0 else ('#c33' if f.efeito < 0 else '#888') }}">
+          {{ '%+.2f' | format(f.efeito) }}
+        </td>
+        <td><small>{{ f.media }} / {{ f.baseline }} ({{ f.metrica }})</small></td>
+        <td>{{ f.n }}</td>
+        <td>{{ '%.2f' | format(f.confianca) }}</td>
+        <td>{% if f.elegivel %}<span class="badge concluido">elegível</span>{% else %}<span class="badge">amostra baixa</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p><small>Sem findings ainda — precisa de vídeos publicados com métricas coletadas.</small></p>
+  {% endif %}
+</section>
+
+<!-- Performance por vídeo + curva de retenção -->
+<section style="margin-bottom:2rem">
+  <h2>Performance por vídeo</h2>
+  {% if performance %}
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr><th>Tema</th><th>Marco</th><th>Métricas</th><th>Retenção</th></tr></thead>
+    <tbody>
+      {% for v in performance %}
+      <tr>
+        <td><small>{{ v.tema or v.video_id }}</small></td>
+        <td>{{ v.marco }}h</td>
+        <td><small>{% for k, val in v.metricas.items() %}{{ k }}={{ val }}{% if not loop.last %}, {% endif %}{% endfor %}</small></td>
+        <td>
+          {% if v.curva_svg %}
+          <svg viewBox="0 0 120 32" width="120" height="32" preserveAspectRatio="none" style="vertical-align:middle">
+            <polyline points="{{ v.curva_svg }}" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+          {% else %}<small>—</small>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p><small>Nenhum vídeo com métricas maduras ainda.</small></p>
+  {% endif %}
+</section>
+
+<!-- Blocos de guia aprendida -->
+<section style="margin-bottom:2rem">
+  <h2>Guia aprendida (por prompt)</h2>
+  <p><small>Diretrizes que o Feedback injeta em cada prompt, <strong>separadas do prompt-base</strong>.
+    Vete uma linha para removê-la da injeção; fixe para protegê-la da reescrita.</small></p>
+  {% for b in blocos %}
+  <details style="margin-bottom:0.5rem">
+    <summary><strong>{{ b.nome }}</strong> — {{ b.injetado_em }}
+      ({{ b.linhas|length }} linha(s){% if b.versao %}, v{{ b.versao }}{% endif %})</summary>
+    <div style="padding:0.5rem 0">
+      {% if b.linhas %}
+      <table>
+        <tbody>
+          {% for l in b.linhas %}
+          <tr style="{{ 'opacity:0.5;text-decoration:line-through' if l.vetado else '' }}">
+            <td>{% if l.fixado %}📌 {% endif %}{{ l.texto }}</td>
+            <td><small>{{ '%.2f' | format(l.confianca or 0) }}</small></td>
+            <td style="white-space:nowrap">
+              <form method="post" action="/feedback/{{ tipo.id }}/guia/{{ b.nome }}/{{ l.indice }}/{{ 'desvetar' if l.vetado else 'vetar' }}" style="display:inline">
+                <button type="submit" class="secundario">{{ 'Desvetar' if l.vetado else 'Vetar' }}</button>
+              </form>
+              <form method="post" action="/feedback/{{ tipo.id }}/guia/{{ b.nome }}/{{ l.indice }}/{{ 'desfixar' if l.fixado else 'fixar' }}" style="display:inline">
+                <button type="submit" class="secundario">{{ 'Desafixar' if l.fixado else 'Fixar' }}</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <form method="post" action="/feedback/{{ tipo.id }}/guia/{{ b.nome }}/limpar" style="margin-top:0.5rem">
+        <button type="submit" class="secundario perigo"
+                onclick="return confirm('Limpar todas as diretrizes deste bloco?')">Limpar bloco</button>
+      </form>
+      {% else %}
+      <p><small>Sem diretrizes aprendidas ainda.</small></p>
+      {% endif %}
+      {% if b.base %}
+      <details style="margin-top:0.5rem"><summary><small>Prompt-base (editável na aba Prompts)</small></summary>
+        <pre style="white-space:pre-wrap"><small>{{ b.base }}</small></pre>
+      </details>
+      {% endif %}
+    </div>
+  </details>
+  {% endfor %}
+</section>
+
+<!-- Histórico aplicado -->
+<section>
+  <h2>Aplicados</h2>
+  {% if aplicados %}
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr><th>Quando</th><th>Alvo</th><th>Mudança</th><th></th></tr></thead>
+    <tbody>
+      {% for a in aplicados %}
+      <tr>
+        <td><small>{{ a.aplicado_em[:16] }}</small></td>
+        <td><code>{{ a.alvo }}</code></td>
+        <td><small>{% if a.tipo == 'guia' %}{{ a.linhas_novas|length }} diretriz(es){% else %}{{ a.valor_antigo }} → {{ a.valor_novo }}{% endif %}</small></td>
+        <td>
+          <form method="post" action="/feedback/{{ tipo.id }}/aplicados/{{ loop.index0 }}/reverter" style="display:inline">
+            <button type="submit" class="secundario"
+                    onclick="return confirm('Reverter esta mudança para o valor anterior?')">Reverter</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p><small>Nada aplicado ainda.</small></p>
+  {% endif %}
+</section>
+
+{% endif %}
+{% endblock %}
