@@ -84,6 +84,66 @@ DESCOBERTA_PADRAO = {
 assert DESCOBERTA_PADRAO["fontes"]["trends_mcp"]["feed"] in FEEDS_TRENDS
 
 
+# --- Dicas de UI (consumidas pelo motor de formulário do Controle) ----------
+# Path pontuado → rótulo/ajuda/limites/opções/avançado. O que não tiver dica é
+# humanizado a partir do nome; assim um knob novo no PADRAO aparece sozinho.
+
+UI_HINTS = {
+    "antecedencia_horas": {
+        "rotulo": "Rodar a descoberta quantas horas antes de gerar o vídeo (0–168)",
+        "min": 0, "max": 168,
+    },
+    "fontes": {"rotulo": "Fontes de sinal", "ajuda": "Cada fonte liga/desliga. YouTube precisa de credencial e gasta cota."},
+    "fontes.trends_mcp": {"rotulo": "Trends MCP"},
+    "fontes.trends_mcp.ativo": {"rotulo": "Ativo"},
+    "fontes.trends_mcp.feed": {"rotulo": "Feed", "opcoes": FEEDS_TRENDS},
+    "fontes.trends_mcp.limite": {"rotulo": "Quantas buscar (1–200)", "min": 1, "max": 200},
+    "fontes.youtube": {"rotulo": "YouTube (Data API v3)", "ajuda": "Precisa de credencial e gasta cota — desligado por padrão."},
+    "fontes.youtube.ativo": {"rotulo": "Ativo"},
+    "fontes.youtube.limite": {"rotulo": "Máx. de resultados por busca (1–50)", "min": 1, "max": 50},
+    "fontes.youtube.consultas": {"rotulo": "Consultas (uma por linha — o que as pessoas buscam)"},
+    "fontes.youtube.canais_nicho": {"rotulo": "Canais do nicho (um id por linha — uploads recentes)"},
+    "fontes.youtube.regiao": {"rotulo": "Região (código de 2 letras, ex: BR)"},
+    "fontes.google_trends": {"rotulo": "Google Trends (pytrends-modern)"},
+    "fontes.google_trends.ativo": {"rotulo": "Ativo"},
+    "fontes.google_trends.limite": {"rotulo": "Quantas buscar (1–100)", "min": 1, "max": 100},
+    "fontes.google_trends.geo": {"rotulo": "País (código de 2 letras, ex: BR)"},
+    "fontes.reddit": {"rotulo": "Reddit (feeds .rss)"},
+    "fontes.reddit.ativo": {"rotulo": "Ativo"},
+    "fontes.reddit.subreddits": {"rotulo": "Subreddits (um por linha, sem o r/)"},
+    "fontes.reddit.limite": {"rotulo": "Quantos posts (1–100)", "min": 1, "max": 100},
+    "fontes.reddit.periodo": {"rotulo": "Período", "opcoes": REDDIT_PERIODOS},
+    "fontes.wikipedia": {"rotulo": "Wikipédia (Pageviews pt)"},
+    "fontes.wikipedia.ativo": {"rotulo": "Ativo"},
+    "fontes.wikipedia.limite": {"rotulo": "Quantos artigos (1–100)", "min": 1, "max": 100},
+    "fontes.manual": {"rotulo": "Pool: ideias manuais (aba Ideias)"},
+    "fontes.manual.ativo": {"rotulo": "Usar ideias manuais"},
+    "fontes.evergreen": {"rotulo": "Pool: ideias evergreen (aba Ideias)"},
+    "fontes.evergreen.ativo": {"rotulo": "Usar ideias evergreen"},
+    "fit": {"rotulo": "Avaliação de fit (LLM)", "ajuda": "O critério/persona fica na aba Prompts (system_prompt_tendencia.txt)."},
+    "fit.score_minimo": {"rotulo": "Score mínimo para aceitar (0–100)", "min": 0, "max": 100},
+    "orcamento_avaliacao": {"rotulo": "Orçamento: quantos candidatos avaliar por ciclo (1–20)", "min": 1, "max": 20},
+    "dedup": {"rotulo": "Deduplicação"},
+    "dedup.dias": {"rotulo": "Janela (dias) — não repetir o que foi feito nos últimos N dias", "min": 1, "max": 365},
+    "dedup.estrategia": {"rotulo": "Estratégia", "opcoes": ESTRATEGIAS_DEDUP},
+    "dedup.limiar": {"rotulo": "Limiar (0–1, só na estratégia \"token\")", "min": 0, "max": 1, "passo": "0.05"},
+    "selecao": {"rotulo": "Seleção (pesos)"},
+    "selecao.peso_sinal": {"rotulo": "Peso do sinal (0–1)", "min": 0, "max": 1, "passo": "0.05"},
+    "selecao.peso_fit": {"rotulo": "Peso do fit (0–1)", "min": 0, "max": 1, "passo": "0.05"},
+    "selecao.peso_frescor": {"rotulo": "Peso do frescor (0–1)", "min": 0, "max": 1, "passo": "0.05"},
+    "selecao.meia_vida_horas": {"rotulo": "Meia-vida do frescor (horas)", "min": 1, "passo": "1"},
+    "evergreen_ratio": {"rotulo": "Fração-alvo de temas evergreen (0–1)", "min": 0, "max": 1, "passo": "0.05"},
+    "modo_revisao": {
+        "rotulo": "Modo de revisão", "opcoes": MODOS_REVIEW,
+        "rotulos_opcoes": {"auto": "auto — vai direto para produção", "revisar": "revisar — aprovar antes de gerar"},
+    },
+    "retencao": {
+        "rotulo": "Retenção dos candidatos não escolhidos", "opcoes": POLITICAS_RETENCAO,
+        "rotulos_opcoes": {"descartar": "descartar — recomeça a cada ciclo", "reter": "reter — mantém no buffer (envelhecem)"},
+    },
+}
+
+
 def _mesclar(padrao: dict, bruto: dict) -> dict:
     """Deep-merge de `bruto` sobre `padrao` (só desce em dicts; listas/valores
     do `bruto` substituem por inteiro)."""
