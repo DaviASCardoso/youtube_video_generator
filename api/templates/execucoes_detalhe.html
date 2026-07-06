@@ -17,6 +17,10 @@
 {% endif %}
 
 {% if execucao.status == 'executando' %}
+<form method="post" action="/execucoes/{{ execucao.id }}/cancelar" style="margin-top:0.75rem">
+  <button type="submit" class="secundario perigo"
+          onclick="return confirm('Cancelar esta execução? Ela para na próxima fronteira de estágio.')">Cancelar execução</button>
+</form>
 <script src="/static/js/log-stream.js"></script>
 <script>iniciarStreamLog("{{ execucao.id }}", "log-area");</script>
 {% endif %}

@@ -18,6 +18,7 @@ from operacoes.execucoes import (
     historico,
     pasta_da_execucao,
     publicar_execucao,
+    solicitar_cancelamento,
 )
 
 scheduler = BackgroundScheduler(
@@ -245,6 +246,27 @@ def disparar_agora(tipo: TipoVideo, tema: str | None = None) -> dict:
         id=f"manual-{execucao['id']}",
     )
     return execucao
+
+
+def descobrir_agora(tipo: TipoVideo) -> None:
+    """Roda um ciclo de descoberta (só decisão do tema) agora, no mesmo executor dos
+    jobs de cron — o "Descobrir agora" do painel. O resultado vai para o slot do tipo
+    (pronto, ou pendente se em modo revisão)."""
+    scheduler.add_job(
+        _job_descoberta,
+        trigger="date",
+        run_date=datetime.now(),
+        args=[tipo.id],
+        id=f"descoberta-manual-{tipo.id}",
+        replace_existing=True,
+    )
+
+
+def cancelar(execucao_id: str) -> None:
+    """Pede o cancelamento cooperativo de uma execução. O pipeline aborta na próxima
+    fronteira de estágio (um run já iniciado numa etapa longa só para ao terminá-la;
+    um run ainda na fila aborta assim que começa)."""
+    solicitar_cancelamento(execucao_id)
 
 
 def reexecutar_agora(execucao_id: str) -> dict:

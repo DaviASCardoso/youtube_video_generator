@@ -3,6 +3,7 @@
 {% block conteudo %}
 <h1>Executar Pipeline</h1>
 {% if erro %}<div class="aviso erro">{{ erro }}</div>{% endif %}
+{% if msg %}<div class="aviso sucesso">{{ msg }}</div>{% endif %}
 
 <form method="post" action="/execucoes" x-data="{ modo: 'fila' }">
   <label>
@@ -31,11 +32,30 @@
   <button type="submit">Executar agora</button>
 </form>
 
+<details style="margin:1rem 0">
+  <summary>Só descobrir o tema (sem gerar)</summary>
+  <form method="post" action="/execucoes/descobrir" style="margin-top:0.5rem">
+    <label>
+      <span class="rotulo">Tipo de vídeo</span>
+      <select name="tipo_id" required>
+        {% for t in tipos %}<option value="{{ t.id }}">{{ t.nome }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="secundario">Descobrir agora</button>
+  </form>
+</details>
+
 {% if em_andamento %}
 <h2>Em andamento</h2>
 <ul>
   {% for e in em_andamento %}
-  <li><a href="/execucoes/{{ e.id }}">{{ e.tipo_nome }} — {{ e.tema }}</a></li>
+  <li>
+    <a href="/execucoes/{{ e.id }}">{{ e.tipo_nome }} — {{ e.tema }}</a>
+    <form method="post" action="/execucoes/{{ e.id }}/cancelar" style="display:inline">
+      <button type="submit" class="secundario perigo"
+              onclick="return confirm('Cancelar esta execução? Ela para na próxima fronteira de estágio.')">Cancelar</button>
+    </form>
+  </li>
   {% endfor %}
 </ul>
 {% endif %}

@@ -52,6 +52,17 @@ class OrcamentoExcedido(Exception):
     """Um estágio pago estouraria o orçamento configurado (ação 'parar')."""
 
 
+class ExecucaoCancelada(Exception):
+    """Cancelamento cooperativo pedido pelo painel, checado entre estágios."""
+
+
+def _checar_cancelamento(cancelado) -> None:
+    """Aborta (entre estágios) se o painel pediu cancelamento. Best-effort: efetiva
+    na próxima fronteira de estágio — não há como matar uma etapa longa em curso."""
+    if cancelado is not None and cancelado():
+        raise ExecucaoCancelada("execução cancelada pelo usuário")
+
+
 def _modo_imagens(tipo: TipoVideo) -> str:
     """Modo de geração das cenas: "ia" (Together) ou "personagem" (Pexels + PNG).
 
@@ -296,7 +307,11 @@ def _estagio_montagem(frases, base, pasta_audio, pasta_imagens, cfg_ger) -> tupl
 
 
 def gerar_video(
-    tema: str, tipo: TipoVideo, output_path: str | Path, ledger: Ledger | None = None
+    tema: str,
+    tipo: TipoVideo,
+    output_path: str | Path,
+    ledger: Ledger | None = None,
+    cancelado=None,
 ) -> Path:
     """Executa o pipeline em estágios, checkpointado, e grava vídeo + sidecar.
 
@@ -305,6 +320,9 @@ def gerar_video(
         tipo: Tipo de vídeo (configuração, prompts e assets) a usar na geração.
         output_path: Pasta do run (artefatos intermediários, vídeo e sidecar).
         ledger: Ledger de custo opcional (o histórico injeta o seu; senão cria um).
+        cancelado: Callable opcional que devolve True quando o painel pediu para
+            cancelar; checado entre estágios (levanta ExecucaoCancelada). None = sem
+            cancelamento (comportamento de sempre).
 
     Returns:
         Path do vídeo final gerado.
@@ -327,15 +345,21 @@ def gerar_video(
     if nome_visual == "pexels":
         validar_personagens(tipo.assets_dir)  # fail-fast antes de gastar
 
-    # Estágios explícitos, cada um checkpointado + com gate de saída.
+    # Estágios explícitos, cada um checkpointado + com gate de saída. Entre eles,
+    # checa o cancelamento cooperativo (fronteira de estágio).
+    _checar_cancelamento(cancelado)
     frases = _estagio_roteiro(tema, tipo, base, cfg_ger, var, led, reaproveitar)
+    _checar_cancelamento(cancelado)
     prov_visual, dados = _estagio_plano_visual(
         frases, tipo, base, cfg_ger, nome_visual, var, led, reaproveitar
     )
+    _checar_cancelamento(cancelado)
     _estagio_visuais(
         frases, prov_visual, dados, tipo, pasta_imagens, cfg_ger, nome_visual, var, led, reaproveitar
     )
+    _checar_cancelamento(cancelado)
     _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, led, reaproveitar)
+    _checar_cancelamento(cancelado)
     caminho_video, duracao = _estagio_montagem(frases, base, pasta_audio, pasta_imagens, cfg_ger)
 
     sidecar.escrever(base, sidecar.montar(tema, frases, duracao, led))

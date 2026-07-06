@@ -181,3 +181,21 @@ def test_publicar_agora_agenda_job(monkeypatch):
     sched.publicar_agora("EX1")
     assert capturado["kwargs"]["args"] == ["EX1"]
     assert capturado["kwargs"]["id"] == "publicar-EX1"
+
+
+# --- descobrir_agora / cancelar ---
+
+def test_descobrir_agora_agenda_job(make_tipo, monkeypatch):
+    capturado = {}
+    monkeypatch.setattr(sched.scheduler, "add_job", lambda *a, **k: capturado.update(kwargs=k))
+    tipo = make_tipo()
+    sched.descobrir_agora(tipo)
+    assert capturado["kwargs"]["args"] == [tipo.id]
+    assert capturado["kwargs"]["id"] == f"descoberta-manual-{tipo.id}"
+
+
+def test_cancelar_pede_cancelamento(monkeypatch):
+    chamado = []
+    monkeypatch.setattr(sched, "solicitar_cancelamento", lambda eid: chamado.append(eid))
+    sched.cancelar("EXEC-9")
+    assert chamado == ["EXEC-9"]

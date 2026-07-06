@@ -9,7 +9,7 @@ from config.settings import Config
 from geracao import pipeline
 from geracao.configuracao import GERACAO_PADRAO
 from geracao.custo import GastoDiario
-from geracao.pipeline import OrcamentoExcedido, _modo_imagens, gerar_video
+from geracao.pipeline import ExecucaoCancelada, OrcamentoExcedido, _modo_imagens, gerar_video
 
 
 def _tipo_com_modo(tmp_path, dados_imagens):
@@ -186,6 +186,19 @@ def test_gerar_video_ramo_ia(tmp_path, sistema_temp, make_tipo, ambiente, monkey
 
     assert (pipeline.provedores.PAPEL_VISUAIS, "flux") in pedidos
     assert (tmp_path / "out" / "prompts.txt").exists()
+
+
+def test_cancelamento_aborta_antes_de_gastar(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    tipo = make_tipo()
+    _instalar_provedores(monkeypatch, visuais=_FakeVisuaisPexels())
+    base = tmp_path / "out"
+
+    with pytest.raises(ExecucaoCancelada):
+        gerar_video("tema", tipo, base, cancelado=lambda: True)
+
+    # cancelou na 1ª fronteira, antes de gerar o roteiro
+    assert not (base / "roteiro.txt").exists()
+    assert not (base / "video_final.mp4").exists()
 
 
 def test_sidecar_registra_provedores_e_custo(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):

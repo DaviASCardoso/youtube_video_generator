@@ -109,6 +109,48 @@ def test_falhar_registra_erro(hist):
     assert atualizado["erro"] == "estourou"
 
 
+def test_cancelar_marca_cancelado(hist):
+    reg = hist.iniciar("canal", "Canal X", "t")
+    hist.cancelar(reg["id"])
+    assert hist.obter(reg["id"])["status"] == "cancelado"
+
+
+def test_cancel_store_ciclo():
+    execucoes.solicitar_cancelamento("EXEC-A")
+    assert execucoes.cancelamento_pedido("EXEC-A") is True
+    execucoes._limpar_cancelamento("EXEC-A")
+    assert execucoes.cancelamento_pedido("EXEC-A") is False
+
+
+def test_executar_com_captura_cancelado(make_tipo, monkeypatch, tmp_path, sistema_temp):
+    from geracao.pipeline import ExecucaoCancelada
+
+    sistema_temp._config["saida"]["pasta_base"] = str(tmp_path / "out")
+    tipo = make_tipo()
+    hist = HistoricoExecucoes(tmp_path / "h.json")
+    monkeypatch.setattr(execucoes, "historico", hist)
+
+    def _cancela(tema, tipo, output_path, ledger=None, cancelado=None):
+        from pathlib import Path
+
+        Path(output_path).mkdir(parents=True, exist_ok=True)
+        raise ExecucaoCancelada("cancelada")
+
+    monkeypatch.setattr(execucoes, "gerar_video", _cancela)
+    emitidas = []
+    monkeypatch.setattr(
+        execucoes.notificacoes, "emitir",
+        lambda cat, *a, **k: emitidas.append(cat) or True,
+    )
+
+    with pytest.raises(ExecucaoCancelada):
+        execucoes.executar_com_captura("tema", tipo)
+
+    reg = hist.listar(tipo.id)[0]
+    assert reg["status"] == "cancelado"
+    assert "run_falhou" not in emitidas  # cancelar não é falha
+
+
 def test_rejeitar_publicacao_marca_rejeitado(hist):
     reg = hist.iniciar("canal", "Canal X", "t")
     hist.marcar_aguardando_publicacao(reg["id"])
@@ -210,7 +252,7 @@ def test_executar_com_captura_gera_e_conclui_sem_destino(
     hist = HistoricoExecucoes(tmp_path / "h.json")
     monkeypatch.setattr(execucoes, "historico", hist)
 
-    def fake_gerar(tema, tipo, output_path, ledger=None):
+    def fake_gerar(tema, tipo, output_path, ledger=None, cancelado=None):
         from pathlib import Path
 
         base = Path(output_path)
@@ -277,7 +319,7 @@ def test_executar_reaproveita_pasta_dada(make_tipo, monkeypatch, tmp_path, siste
 
     recebido = {}
 
-    def fake_gerar(tema, tipo, output_path, ledger=None):
+    def fake_gerar(tema, tipo, output_path, ledger=None, cancelado=None):
         recebido["output_path"] = Path(output_path)
         Path(output_path).mkdir(parents=True, exist_ok=True)
         video = Path(output_path) / "video_final.mp4"

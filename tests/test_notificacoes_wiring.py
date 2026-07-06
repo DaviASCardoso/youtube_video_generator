@@ -33,7 +33,7 @@ def test_run_falhou_emite(make_tipo, monkeypatch, tmp_path, sistema_temp, emisso
     hist = HistoricoExecucoes(tmp_path / "h.json")
     monkeypatch.setattr(execucoes, "historico", hist)
 
-    def _boom(tema, tipo, output_path, ledger=None):
+    def _boom(tema, tipo, output_path, ledger=None, cancelado=None):
         from pathlib import Path
 
         Path(output_path).mkdir(parents=True, exist_ok=True)
@@ -52,7 +52,7 @@ def test_run_ok_nao_emite(make_tipo, monkeypatch, tmp_path, sistema_temp, emisso
     hist = HistoricoExecucoes(tmp_path / "h.json")
     monkeypatch.setattr(execucoes, "historico", hist)
 
-    def _ok(tema, tipo, output_path, ledger=None):
+    def _ok(tema, tipo, output_path, ledger=None, cancelado=None):
         from pathlib import Path
 
         base_dir = Path(output_path)

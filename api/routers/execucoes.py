@@ -17,12 +17,13 @@ def _em_andamento() -> list[dict]:
     return [e for e in historico.listar() if e["status"] == "executando"]
 
 
-def _contexto_index(erro: str | None = None) -> dict:
+def _contexto_index(erro: str | None = None, msg: str | None = None) -> dict:
     return {
         "tipos": listar_tipos(),
         "em_andamento": _em_andamento(),
         "recentes": historico.listar()[:10],
         "erro": erro,
+        "msg": msg,
     }
 
 
@@ -31,6 +32,24 @@ def pagina_inicio(request: Request):
     return templates.TemplateResponse(
         "execucoes_index.html", {"request": request, **_contexto_index()}
     )
+
+
+@router.post("/descobrir", response_class=HTMLResponse)
+def descobrir(request: Request, tipo_id: str = Form(...)):
+    """Descoberta-only: decide o tema agora (sem gerar), no executor dos jobs."""
+    tipo = carregar_tipo(tipo_id)
+    scheduler_mod.descobrir_agora(tipo)
+    return templates.TemplateResponse(
+        "execucoes_index.html",
+        {"request": request, **_contexto_index(msg=f"Descoberta disparada para {tipo.nome}. Veja a aba Descoberta do tipo.")},
+    )
+
+
+@router.post("/{execucao_id}/cancelar")
+def cancelar(execucao_id: str):
+    """Cancelamento cooperativo (efetiva na próxima fronteira de estágio)."""
+    scheduler_mod.cancelar(execucao_id)
+    return RedirectResponse(url=f"/execucoes/{execucao_id}", status_code=303)
 
 
 @router.post("", response_class=HTMLResponse)

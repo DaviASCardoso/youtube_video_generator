@@ -9,7 +9,7 @@ import threading
 from config.tipos import TipoVideo
 from config.sistema import sistema
 from geracao.custo import Ledger
-from geracao.pipeline import gerar_video
+from geracao.pipeline import gerar_video, ExecucaoCancelada
 from operacoes import notificacoes
 
 _HISTORICO_PATH = Path(__file__).parent.parent / "execucoes" / "historico.json"
@@ -198,6 +198,13 @@ class HistoricoExecucoes:
             erro=erro,
         )
 
+    def cancelar(self, execucao_id: str) -> dict:
+        return self._atualizar(
+            execucao_id,
+            status="cancelado",
+            finalizado_em=datetime.now(timezone.utc).isoformat(),
+        )
+
     def listar(self, tipo_id: str | None = None) -> list[dict]:
         """Lista execuções, mais recentes primeiro.
 
@@ -233,6 +240,26 @@ class HistoricoExecucoes:
 
 
 historico = HistoricoExecucoes(_HISTORICO_PATH)
+
+# Cancelamento cooperativo: o painel pede o cancelamento de uma execução em curso e o
+# pipeline aborta na próxima fronteira de estágio (não há como matar uma etapa longa).
+_cancelamentos: set[str] = set()
+_cancel_lock = threading.Lock()
+
+
+def solicitar_cancelamento(execucao_id: str) -> None:
+    with _cancel_lock:
+        _cancelamentos.add(execucao_id)
+
+
+def cancelamento_pedido(execucao_id: str) -> bool:
+    with _cancel_lock:
+        return execucao_id in _cancelamentos
+
+
+def _limpar_cancelamento(execucao_id: str) -> None:
+    with _cancel_lock:
+        _cancelamentos.discard(execucao_id)
 
 
 def pasta_da_execucao(registro: dict) -> Path | None:
@@ -419,7 +446,10 @@ def executar_com_captura(
     _proxy.ativar(tee)
     ledger = Ledger()
     try:
-        caminho = gerar_video(tema=tema, tipo=tipo, output_path=output_path, ledger=ledger)
+        caminho = gerar_video(
+            tema=tema, tipo=tipo, output_path=output_path, ledger=ledger,
+            cancelado=lambda: cancelamento_pedido(execucao["id"]),
+        )
         historico.registrar_custos(execucao["id"], ledger)
         _publicar_se_configurado(execucao["id"], tipo, caminho, ledger=ledger)
         # A publicação pode ter marcado o run como "aguardando_publicacao" (gate de
@@ -427,6 +457,10 @@ def executar_com_captura(
         if historico.obter(execucao["id"])["status"] == "executando":
             historico.concluir(execucao["id"], caminho)
         return caminho
+    except ExecucaoCancelada:
+        print("Execução cancelada pelo usuário.")
+        historico.cancelar(execucao["id"])
+        raise
     except Exception as e:
         historico.falhar(execucao["id"], str(e))
         notificacoes.emitir(
@@ -436,6 +470,7 @@ def executar_com_captura(
         )
         raise
     finally:
+        _limpar_cancelamento(execucao["id"])
         _proxy.desativar()
         tee.close()
 
