@@ -39,6 +39,19 @@ def test_slot_aprovar_vazio(make_tipo):
     assert estado.slot_de(make_tipo()).aprovar() is None
 
 
+def test_slot_editar_tema_preserva_estado(make_tipo):
+    s = estado.slot_de(make_tipo())
+    s.gravar(_decisao("pendente", tema="Tema antigo"))
+    editada = s.editar_tema("Tema novo")
+    assert editada.tema == "Tema novo"
+    assert editada.estado == "pendente"  # continua aguardando aprovação
+    assert s.ler().tema == "Tema novo"
+
+
+def test_slot_editar_tema_vazio(make_tipo):
+    assert estado.slot_de(make_tipo()).editar_tema("x") is None
+
+
 def test_slot_limpar(make_tipo):
     s = estado.slot_de(make_tipo())
     s.gravar(_decisao())

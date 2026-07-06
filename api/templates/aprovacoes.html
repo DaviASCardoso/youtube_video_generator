@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block titulo %}Aprovações{% endblock %}
+{% block conteudo %}
+<h1>Aprovações</h1>
+<p><small>Onde o sistema espera por você: temas decididos em modo revisão e vídeos prontos aguardando publicação.</small></p>
+<div id="aprovacoes">
+  {% include "_aprovacoes_lista.html" %}
+</div>
+{% endblock %}

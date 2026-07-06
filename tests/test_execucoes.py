@@ -109,6 +109,15 @@ def test_falhar_registra_erro(hist):
     assert atualizado["erro"] == "estourou"
 
 
+def test_rejeitar_publicacao_marca_rejeitado(hist):
+    reg = hist.iniciar("canal", "Canal X", "t")
+    hist.marcar_aguardando_publicacao(reg["id"])
+    hist.rejeitar_publicacao(reg["id"])
+    atualizado = hist.obter(reg["id"])
+    assert atualizado["status"] == "rejeitado"
+    assert atualizado["finalizado_em"] is not None
+
+
 def test_listar_filtra_por_tipo(hist):
     hist.iniciar("a", "A", "t")
     r = hist.iniciar("b", "B", "t")

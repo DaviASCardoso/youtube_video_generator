@@ -164,6 +164,15 @@ class HistoricoExecucoes:
             finalizado_em=datetime.now(timezone.utc).isoformat(),
         )
 
+    def rejeitar_publicacao(self, execucao_id: str) -> dict:
+        """Gate de revisão: rejeita a publicação de um run que aguardava aprovação.
+        O vídeo continua no disco; o run sai da fila de aprovação como 'rejeitado'."""
+        return self._atualizar(
+            execucao_id,
+            status="rejeitado",
+            finalizado_em=datetime.now(timezone.utc).isoformat(),
+        )
+
     def registrar_custos(self, execucao_id: str, ledger) -> dict:
         """Anota no registro o custo/provedor por etapa vindos do Ledger do run."""
         return self._atualizar(

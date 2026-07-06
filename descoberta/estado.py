@@ -68,6 +68,16 @@ class SlotDecidido(_ArquivoJson):
             self._salvar(dados)
             return Decisao.de_dict(dados)
 
+    def editar_tema(self, tema: str) -> Decisao | None:
+        """Edita o texto do tema decidido (no gate de aprovação), preservando o estado."""
+        with self._lock:
+            dados = self._carregar()
+            if not dados:
+                return None
+            dados["tema"] = tema
+            self._salvar(dados)
+            return Decisao.de_dict(dados)
+
     def limpar(self) -> None:
         with self._lock:
             self._salvar(None)

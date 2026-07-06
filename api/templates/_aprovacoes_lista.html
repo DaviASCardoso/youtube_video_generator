@@ -1,0 +1,45 @@
+{% if erro %}<div class="aviso erro">{{ erro }}</div>{% endif %}
+
+<h2>Temas aguardando aprovação (Descoberta)</h2>
+{% if descoberta %}
+  {% for item in descoberta %}
+  <div class="aviso" style="border-left:4px solid #888">
+    <strong>{{ item.tipo.nome }}</strong>
+    <p style="margin:0.3rem 0"><em>{{ item.decisao.tema }}</em>
+      <small>— fonte: {{ item.decisao.fonte }}, fit: {{ item.decisao.fit_score }}, {{ item.decisao.categoria }}</small></p>
+    {% if item.decisao.justificativa %}<p style="margin:0.2rem 0"><small>{{ item.decisao.justificativa }}</small></p>{% endif %}
+    <form hx-post="/aprovacoes/descoberta/{{ item.tipo.id }}/editar" hx-target="#aprovacoes" hx-swap="innerHTML"
+          style="display:flex; gap:0.4rem; margin:0.4rem 0">
+      <input type="text" name="tema" value="{{ item.decisao.tema }}" style="flex:1" required>
+      <button class="secundario" type="submit">Salvar tema</button>
+    </form>
+    <div style="display:flex; gap:0.5rem">
+      <button hx-post="/aprovacoes/descoberta/{{ item.tipo.id }}/aprovar" hx-target="#aprovacoes" hx-swap="innerHTML">Aprovar e gerar no horário</button>
+      <button class="secundario perigo" hx-post="/aprovacoes/descoberta/{{ item.tipo.id }}/rejeitar"
+              hx-target="#aprovacoes" hx-swap="innerHTML" hx-confirm="Rejeitar este tema? A descoberta decidirá outro no próximo ciclo.">Rejeitar</button>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <p><small>Nenhum tema aguardando aprovação.</small></p>
+{% endif %}
+
+<h2 style="margin-top:1.5rem">Vídeos aguardando publicação</h2>
+{% if publicacao %}
+  {% for r in publicacao %}
+  <div class="aviso" style="border-left:4px solid #888">
+    <strong>{{ r.tipo_nome }}</strong> — <em>{{ r.tema }}</em>
+    <p style="margin:0.3rem 0"><small>gerado em {{ r.finalizado_em[:16] if r.finalizado_em else '—' }} ·
+      <a href="/execucoes/{{ r.id }}">ver run &amp; artefatos</a></small></p>
+    <div style="display:flex; gap:0.5rem">
+      <button hx-post="/aprovacoes/publicacao/{{ r.id }}/aprovar" hx-target="#aprovacoes" hx-swap="innerHTML"
+              hx-confirm="Aprovar e publicar (idempotente)?">Aprovar &amp; publicar</button>
+      <button class="secundario perigo" hx-post="/aprovacoes/publicacao/{{ r.id }}/rejeitar"
+              hx-target="#aprovacoes" hx-swap="innerHTML"
+              hx-confirm="Rejeitar a publicação? O vídeo fica no disco, mas não é publicado.">Rejeitar</button>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <p><small>Nenhum vídeo aguardando publicação.</small></p>
+{% endif %}
