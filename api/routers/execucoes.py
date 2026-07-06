@@ -4,7 +4,9 @@ import queue as queue_mod
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 
+from api.auth import auth_ativo
 from api.templating import templates
+from operacoes import saude
 from operacoes import scheduler as scheduler_mod
 from config.tipos import carregar_tipo, listar_tipos
 from config.sistema import sistema
@@ -22,6 +24,8 @@ def _contexto_index(erro: str | None = None, msg: str | None = None) -> dict:
         "tipos": listar_tipos(),
         "em_andamento": _em_andamento(),
         "recentes": historico.listar()[:10],
+        "saude": saude.coletar(),
+        "auth_ativo": auth_ativo(),
         "erro": erro,
         "msg": msg,
     }

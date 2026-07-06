@@ -74,6 +74,34 @@ NOTIFICACOES_PADRAO = {
 }
 
 
+# --- Dicas de UI (consumidas pelo motor de formulário do Controle) ----------
+
+_ROTULOS_CATEGORIA = {
+    "run_falhou": "Run falhou (após retries)",
+    "credencial": "Credencial expirando/expirada",
+    "cota_atingida": "Cota de upload atingida",
+    "disco_baixo": "Disco/NAS baixo",
+    "scheduler_parado": "Scheduler parado",
+    "revisao_pendente": "Item aguardando revisão",
+    "video_publicado": "Vídeo publicado (rotina)",
+    "run_concluido": "Run concluído (rotina)",
+    "etapa": "Progresso por etapa (rotina)",
+}
+
+UI_HINTS = {
+    "ativo": {"rotulo": "Ativar notificações (interruptor geral)"},
+    "horas_silencio": {"rotulo": "Horas de silêncio (suprime as não-críticas)"},
+    "horas_silencio.ativo": {"rotulo": "Ativar horas de silêncio"},
+    "horas_silencio.inicio": {"rotulo": "Início", "tipo": "time"},
+    "horas_silencio.fim": {"rotulo": "Fim", "tipo": "time"},
+    "categorias": {"rotulo": "Eventos"},
+}
+for _cat, _rot in _ROTULOS_CATEGORIA.items():
+    UI_HINTS[f"categorias.{_cat}"] = {"rotulo": _rot}
+    UI_HINTS[f"categorias.{_cat}.ativo"] = {"rotulo": "Notificar"}
+    UI_HINTS[f"categorias.{_cat}.prioridade"] = {"rotulo": "Prioridade", "opcoes": PRIORIDADES}
+
+
 def _mesclar(padrao: dict, bruto: dict) -> dict:
     """Deep-merge de `bruto` sobre `padrao` (só desce em dicts)."""
     resultado = copy.deepcopy(padrao)

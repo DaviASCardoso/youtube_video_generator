@@ -1,0 +1,20 @@
+{% import "_form_schema.html" as fs %}
+{% if sucesso_notif %}<div class="aviso sucesso">Notificações salvas com sucesso.</div>{% endif %}
+{% if erro_notif %}<div class="aviso erro">{{ erro_notif }}</div>{% endif %}
+{% if msg_notif %}<div class="aviso">{{ msg_notif }}</div>{% endif %}
+
+<div class="aviso" style="border-left:4px solid #888">
+  <strong>Canal ntfy:</strong> {{ 'configurado' if ntfy.configurado else 'não configurado' }}
+  <br><small>Servidor: <code>{{ ntfy.servidor }}</code> ·
+  Tópico: {{ 'definido' if ntfy.topico else 'ausente' }} ·
+  Token: {{ 'definido' if ntfy.token else 'ausente' }}</small>
+  <br><small>O servidor, o tópico e o token ficam no <code>.env</code> (<code>NTFY_SERVER</code>,
+  <code>NTFY_TOPIC</code>, <code>NTFY_TOKEN</code>) — fora da camada HTTP. O tópico, num servidor
+  público, funciona como senha: escolha algo impossível de adivinhar.</small>
+</div>
+
+<form hx-post="/configuracoes/notificacoes/teste" hx-target="#form-notificacoes" hx-swap="innerHTML" style="margin-bottom:1rem">
+  <button type="submit" class="secundario">Enviar notificação de teste</button>
+</form>
+
+{{ fs.render_form(campos_notif, action="/configuracoes/notificacoes", submit="Salvar notificações", target="#form-notificacoes") }}

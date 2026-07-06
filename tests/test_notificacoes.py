@@ -200,3 +200,53 @@ def test_configurado_reflete_topico(monkeypatch):
     monkeypatch.setenv("NTFY_TOPIC", "x")
     assert n.configurado() is True
     assert n.servidor() == n.SERVIDOR_PADRAO
+
+
+# --- formulário schema-driven (aba Notificações) ----------------------------
+
+
+def _paths(padrao, prefixo=""):
+    out = set()
+    for chave, val in padrao.items():
+        path = f"{prefixo}.{chave}" if prefixo else chave
+        out.add(path)
+        if isinstance(val, dict):
+            out |= _paths(val, path)
+    return out
+
+
+def test_ui_hints_paths_reais():
+    assert not (set(n.UI_HINTS) - _paths(n.NOTIFICACOES_PADRAO))
+
+
+def test_ui_hints_opcoes_batem_com_default():
+    for path, hint in n.UI_HINTS.items():
+        if "opcoes" not in hint:
+            continue
+        val = n.NOTIFICACOES_PADRAO
+        for p in path.split("."):
+            val = val[p]
+        if not isinstance(val, dict):
+            assert val in hint["opcoes"]
+
+
+def test_parity_notificacoes_roundtrip():
+    from api import formulario
+
+    itens = formulario.arvore(n.NOTIFICACOES_PADRAO, n.NOTIFICACOES_PADRAO, n.UI_HINTS)
+
+    def flat(itens, out):
+        for it in itens:
+            if it.kind == "grupo":
+                flat(it.itens, out)
+            elif it.tipo == "checkbox":
+                if it.valor:
+                    out[it.nome] = "on"
+            elif it.valor is None:
+                out[it.nome] = ""
+            else:
+                out[it.nome] = str(it.valor)
+        return out
+
+    recon = formulario.reagrupar(flat(itens, {}), n.NOTIFICACOES_PADRAO, n.UI_HINTS)
+    assert n.mesclar_notificacoes(recon) == n.NOTIFICACOES_PADRAO

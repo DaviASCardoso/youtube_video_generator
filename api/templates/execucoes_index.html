@@ -5,6 +5,59 @@
 {% if erro %}<div class="aviso erro">{{ erro }}</div>{% endif %}
 {% if msg %}<div class="aviso sucesso">{{ msg }}</div>{% endif %}
 
+{% if saude %}
+<section class="painel-saude" style="margin-bottom:1.5rem">
+  <h2>Painel</h2>
+  <div style="display:flex; flex-wrap:wrap; gap:0.75rem">
+    <div class="aviso" style="flex:1; min-width:180px">
+      <strong>Scheduler</strong><br>
+      {{ '✅ rodando' if saude.scheduler_rodando else '⚠️ parado' }}
+    </div>
+    <div class="aviso" style="flex:1; min-width:180px">
+      <strong>Disco</strong><br>
+      {{ saude.disco.livre_gb }} GB livres ({{ saude.disco.livre_pct }}%){% if saude.disco.baixo %} — ⚠️ baixo{% endif %}
+    </div>
+    <div class="aviso" style="flex:1; min-width:180px">
+      <strong>Gasto hoje</strong><br>
+      US$ {{ '%.4f' | format(saude.gasto_hoje) }}
+    </div>
+    <div class="aviso" style="flex:1; min-width:180px">
+      <strong>Autenticação</strong><br>
+      {{ '🔒 ativa' if auth_ativo else '🔓 aberta (defina ADMIN_USER/ADMIN_PASSWORD)' }}
+    </div>
+    <div class="aviso" style="flex:1; min-width:180px">
+      <strong>ntfy</strong><br>
+      {{ '✅ configurado' if saude.ntfy_configurado else '— não configurado' }}
+    </div>
+  </div>
+
+  {% if saude.credenciais %}
+  <p style="margin:0.5rem 0 0"><strong>Credenciais:</strong>
+    {% for c in saude.credenciais %}
+      {{ c.tipo_nome }}=<span class="badge {{ c.status }}">{{ c.status }}</span>{% if not loop.last %}, {% endif %}
+    {% endfor %}
+  </p>
+  {% endif %}
+
+  <details style="margin-top:0.5rem">
+    <summary>Cota e orçamento por tipo</summary>
+    <table>
+      <thead><tr><th>Tipo</th><th>Uploads hoje / cap</th><th>Teto diário (USD)</th><th>Último publish</th></tr></thead>
+      <tbody>
+        {% for cota in saude.cotas %}
+        <tr>
+          <td>{{ cota.tipo_nome }}</td>
+          <td>{{ cota.uploads }} / {{ cota.cap if cota.cap else '∞' }}</td>
+          <td>{% for o in saude.orcamentos if o.tipo_id == cota.tipo_id %}{{ o.teto_dia }}{% endfor %}</td>
+          <td>{% for p in saude.publicacoes if p.tipo_id == cota.tipo_id %}{% if p.ultimo %}<a href="{{ p.ultimo.url }}" target="_blank">{{ p.ultimo.quando[:16] }}</a>{% else %}—{% endif %}{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</section>
+{% endif %}
+
 <form method="post" action="/execucoes" x-data="{ modo: 'fila' }">
   <label>
     <span class="rotulo">Tipo de vídeo</span>
