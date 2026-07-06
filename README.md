@@ -20,11 +20,11 @@ O sistema é organizado em **sete pilares**, cada um com uma responsabilidade cl
 | **Geração** | Transformar o tema no artefato de mídia final: roteiro, imagens, narração e montagem do vídeo. | `geracao/` |
 | **Publicação** | Levar o artefato até a plataforma: metadados, upload, visibilidade. | `publicacao/` |
 | **Controle** | Superfície humana **fina e schema-driven**: painel web (config, disparo, aprovação, dashboard, notificações), camadas de configuração, histórico e logs. | `api/` + `config/` |
-| **Feedback** | Fechar o ciclo com o desempenho real: analytics → entradas que os produziram. | `feedback/` *(placeholder)* |
+| **Feedback** | Fechar o ciclo com o desempenho real: ingerir analytics, atribuir aos inputs, agregar em findings e **aplicar** (ajuste numérico limitado no config **ou** guia de prompt traduzida por LLM), advisory por default. | `feedback/` |
 | **Operações** | Rodar sem supervisão: agendamento, orquestração, erros, segredos, custo. *(transversal)* | `operacoes/` |
 | **Conformidade** | Ficar dentro das regras da plataforma: divulgação de mídia sintética, autenticidade. | `conformidade/` *(placeholder)* |
 
-Cada pilar tem um `README.md` próprio detalhando seus módulos. **Controle** mantém dois lares existentes e já bem nomeados (`api/` para a app web, `config/` para as camadas de configuração). **Feedback** e **Conformidade** ainda não têm código — são lares reservados. Pastas de dados de runtime (`output/`, `execucoes/`, `tendencias/`) e o conteúdo por tipo (`tipos/`) não são código e ficam na raiz.
+Cada pilar tem um `README.md` próprio detalhando seus módulos. **Controle** mantém dois lares existentes e já bem nomeados (`api/` para a app web, `config/` para as camadas de configuração). **Conformidade** ainda não tem código — é um lar reservado. Pastas de dados de runtime (`output/`, `execucoes/`, `tendencias/`, e por tipo `tipos/<id>/feedback/` e `tipos/<id>/guia/`) e o conteúdo por tipo (`tipos/`) não são código e ficam na raiz.
 
 ## Pipeline
 
