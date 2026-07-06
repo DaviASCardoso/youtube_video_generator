@@ -80,6 +80,51 @@ GERACAO_PADRAO = {
 }
 
 
+# --- Dicas de UI (consumidas pelo motor de formulário do Controle) ----------
+
+UI_HINTS = {
+    "roteiro": {"rotulo": "Roteiro"},
+    "roteiro.provedor": {"rotulo": "Provedor", "opcoes": PROVEDORES_ROTEIRO},
+    "roteiro.duracao_alvo_seg": {"rotulo": "Duração-alvo (segundos, 5–3600)", "min": 5, "max": 3600},
+    "roteiro.tom": {"rotulo": "Tom (opcional — vazio mantém a persona do prompt)"},
+    "roteiro.min_palavras": {"rotulo": "Mín. de palavras do roteiro (0 = sem mínimo)", "min": 0},
+    "roteiro.max_palavras": {"rotulo": "Máx. de palavras do roteiro", "min": 1},
+    "visuais": {"rotulo": "Visuais"},
+    "visuais.provedor": {"rotulo": "Provedor (auto deriva do modo de imagens)", "opcoes": PROVEDORES_VISUAIS},
+    "visuais.imagens_por_cena": {"rotulo": "Imagens por cena (1–10)", "min": 1, "max": 10},
+    "visuais.fallback": {"rotulo": "Fallback quando o visual falha", "opcoes": FALLBACKS_VISUAIS},
+    "narracao": {"rotulo": "Narração"},
+    "narracao.provedor": {"rotulo": "Provedor", "opcoes": PROVEDORES_NARRACAO},
+    "narracao.voz_secundaria": {"rotulo": "Voz secundária (fallback — vazio desativa)"},
+    "legendas": {"rotulo": "Legendas"},
+    "legendas.ativo": {"rotulo": "Queimar legendas no vídeo"},
+    "legendas.tamanho": {"rotulo": "Tamanho da fonte (8–200)", "min": 8, "max": 200},
+    "legendas.cor": {"rotulo": "Cor (hex, ex: #FFFFFF)"},
+    "legendas.posicao": {"rotulo": "Posição", "opcoes": POSICOES_LEGENDA},
+    "montagem": {"rotulo": "Montagem"},
+    "montagem.musica_fundo": {"rotulo": "Música de fundo"},
+    "montagem.musica_fundo.ativo": {"rotulo": "Música de fundo"},
+    "montagem.musica_fundo.arquivo": {"rotulo": "Arquivo de música (caminho — vazio = sem música)"},
+    "montagem.intro": {"rotulo": "Intro (caminho de vídeo — opcional)"},
+    "montagem.outro": {"rotulo": "Outro (caminho de vídeo — opcional)"},
+    "variacao": {
+        "rotulo": "Variação (0 = idêntico, 1 = sempre varia)",
+        "ajuda": "Anti-repetição: varia abertura/estrutura/estilo/música para nenhum vídeo sair igual ao anterior.",
+    },
+    "variacao.aberturas": {"rotulo": "Aberturas", "min": 0, "max": 1, "passo": "0.05"},
+    "variacao.estrutura": {"rotulo": "Estrutura", "min": 0, "max": 1, "passo": "0.05"},
+    "variacao.musica": {"rotulo": "Música", "min": 0, "max": 1, "passo": "0.05"},
+    "variacao.estilo_visual": {"rotulo": "Estilo visual", "min": 0, "max": 1, "passo": "0.05"},
+    "variacao.semente": {"rotulo": "Semente (opcional — fixa a variação para reproduzir)", "tipo": "number"},
+    "orcamento": {"rotulo": "Orçamento (USD — teto 0 = sem limite, só mede)"},
+    "orcamento.por_video_usd": {"rotulo": "Por vídeo", "min": 0, "passo": "0.01"},
+    "orcamento.por_dia_usd": {"rotulo": "Por dia", "min": 0, "passo": "0.01"},
+    "orcamento.acao": {"rotulo": "Ao estourar", "opcoes": ACOES_ORCAMENTO},
+    "checkpoint": {"rotulo": "Checkpoint"},
+    "checkpoint.reaproveitar": {"rotulo": "Reaproveitar artefatos válidos ao reexecutar"},
+}
+
+
 def _mesclar(padrao: dict, bruto: dict) -> dict:
     """Deep-merge de `bruto` sobre `padrao` (só desce em dicts; listas/valores
     do `bruto` substituem por inteiro)."""
