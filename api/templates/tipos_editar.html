@@ -22,6 +22,7 @@
     <button type="button" :class="{ ativa: aba === 'descoberta' }" @click="aba = 'descoberta'">Descoberta</button>
     <button type="button" :class="{ ativa: aba === 'geracao' }" @click="aba = 'geracao'">Geração</button>
     <button type="button" :class="{ ativa: aba === 'publicacao' }" @click="aba = 'publicacao'">Publicação</button>
+    <button type="button" :class="{ ativa: aba === 'feedback' }" @click="aba = 'feedback'">Feedback</button>
     <button type="button" :class="{ ativa: aba === 'temas' }" @click="aba = 'temas'">Ideias</button>
   </div>
 
@@ -39,6 +40,9 @@
   </div>
   <div x-show="aba === 'publicacao'" id="publicacao-tab">
     {% include "_tipos_publicacao_tab.html" %}
+  </div>
+  <div x-show="aba === 'feedback'" id="feedback-tab">
+    {% include "_tipos_feedback_tab.html" %}
   </div>
   <div x-show="aba === 'temas'" id="temas-tab">
     {% include "_tipos_temas_tab.html" %}

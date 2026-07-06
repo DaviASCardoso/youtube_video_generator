@@ -1,0 +1,16 @@
+{% import "_form_schema.html" as fs %}
+{% if sucesso %}
+<div class="aviso sucesso">Configuração de feedback salva com sucesso.</div>
+{% endif %}
+{% if erro %}
+<div class="aviso erro">{{ erro }}</div>
+{% endif %}
+
+<p><small>
+  O laço de aprendizado é <strong>inerte por default</strong>: ligue um destino de
+  analytics abaixo (e reconsinta o escopo <code>yt-analytics.readonly</code>) para
+  começar a ingerir métricas. A aplicação é <strong>advisory</strong> por default —
+  as propostas aparecem em <a href="/feedback">Feedback</a> para você aprovar.
+</small></p>
+
+{{ fs.render_form(campos_feedback, action="/tipos/" ~ tipo.id ~ "/feedback", submit="Salvar feedback", target="#feedback-tab") }}
