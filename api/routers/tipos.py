@@ -2,6 +2,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import ValidationError
 
+from api import formulario
 from api.schemas import TipoConfig
 from api.templating import templates
 from descoberta.configuracao import mesclar_descoberta
@@ -28,6 +29,78 @@ from api.routers.publicacao import contexto_publicacao
 from api.routers.temas import contexto_temas
 
 router = APIRouter(prefix="/tipos", tags=["tipos"])
+
+# A aba Config edita nome/ativo + os blocos não-pilar do config.json. Os blocos de
+# pilar (descoberta/geracao/publicacao) têm abas próprias e são preservados no salvar.
+_BLOCOS_PILAR = ("descoberta", "geracao", "publicacao")
+CONFIG_TAB_PADRAO = {
+    "nome": "",
+    "ativo": False,
+    **{k: v for k, v in DEFAULT_CONFIG.items() if k not in _BLOCOS_PILAR},
+}
+
+UI_HINTS_CONFIG = {
+    "nome": {"rotulo": "Nome"},
+    "ativo": {"rotulo": "Ativo (aparece no agendador)"},
+    "groq": {"rotulo": "Roteiro (Groq)"},
+    "groq.modelo": {"rotulo": "Modelo"},
+    "groq.temperatura": {"rotulo": "Temperatura (0.0–2.0)", "min": 0, "max": 2, "passo": "0.1"},
+    "groq.max_tokens": {"rotulo": "Máx. tokens", "min": 1, "max": 32768},
+    "together": {"rotulo": 'Imagens por IA (Together — usado só no modo "ia")'},
+    "together.modelo": {"rotulo": "Modelo"},
+    "together.steps": {"rotulo": "Steps (1–50)", "min": 1, "max": 50},
+    "together.aspect_ratio": {"rotulo": "Proporção", "opcoes": list(ASPECT_RATIOS)},
+    "imagens": {"rotulo": "Cenas do vídeo"},
+    "imagens.modo": {
+        "rotulo": "Modo de geração", "opcoes": MODOS_IMAGEM,
+        "rotulos_opcoes": {
+            "ia": "ia — imagens geradas por IA (Together)",
+            "personagem": "personagem — foto do Pexels + PNG do personagem",
+        },
+    },
+    "imagens.largura": {"rotulo": "Largura do vídeo (px)", "min": 480, "max": 3840},
+    "imagens.altura": {"rotulo": "Altura do vídeo (px)", "min": 480, "max": 3840},
+    "imagens.personagem": {
+        "rotulo": 'Personagem (modo "personagem")',
+        "ajuda": "Os PNGs do personagem (um por emoção) ficam na aba Prompts. O canto inferior esquerdo é o único que a interface do YouTube Shorts deixa livre (direita = botões, baixo = título).",
+    },
+    "imagens.personagem.posicao": {
+        "rotulo": "Posição na tela", "opcoes": POSICOES,
+        "rotulos_opcoes": {p: p.replace("_", " ") for p in POSICOES},
+    },
+    "imagens.personagem.altura_percentual": {"rotulo": "Altura do personagem (% da tela, 10–100)", "min": 10, "max": 100},
+    "imagens.personagem.margem_lateral": {"rotulo": "Margem lateral (px, distância da borda esquerda/direita)", "min": 0, "max": 1000},
+    "imagens.personagem.margem_vertical": {"rotulo": "Margem vertical (px — deixe ~380 embaixo para o título do Shorts)", "min": 0, "max": 1000},
+    "tts": {"rotulo": "Narração (Google TTS)"},
+    "tts.idioma": {"rotulo": "Idioma (ex: pt-BR)"},
+    "tts.voz": {"rotulo": "Voz"},
+    "tts.velocidade": {"rotulo": "Velocidade (0.25–4.0)", "min": 0.25, "max": 4.0, "passo": "0.05"},
+    "tts.pitch": {"rotulo": "Tom / pitch (-20.0–20.0)", "min": -20, "max": 20, "passo": "0.5"},
+    "pipeline": {"rotulo": "Roteirização"},
+    "pipeline.min_chars_por_periodo": {"rotulo": "Mínimo de caracteres por período", "min": 1},
+    "agendamento": {"rotulo": "Agendamento"},
+    "agendamento.frequencia": {"rotulo": "Frequência", "opcoes": FREQUENCIAS},
+    "agendamento.horario": {"rotulo": "Horário (HH:MM)", "tipo": "time"},
+    "agendamento.fuso_horario": {"rotulo": "Fuso horário (ex: America/Sao_Paulo)"},
+    "youtube": {
+        "rotulo": "YouTube (legado — a publicação agora é na aba Publicação)",
+        "ajuda": "⚠️ Deixe o publicar desligado até ter certeza. A publicação real é configurada na aba Publicação (destino YouTube).",
+    },
+    "youtube.categoria_id": {"rotulo": "Id da categoria"},
+    "youtube.visibilidade": {"rotulo": "Visibilidade", "opcoes": VISIBILIDADES},
+    "youtube.tags": {"rotulo": "Tags (uma por linha)"},
+    "youtube.publicar": {"rotulo": "Publicar automaticamente no YouTube após gerar (legado)"},
+    "youtube.descricao_base": {"rotulo": "Descrição base (entra na descrição do vídeo, depois do roteiro)", "multilinha": True},
+}
+
+
+def _campos_config(atual: dict) -> list:
+    return formulario.arvore(CONFIG_TAB_PADRAO, atual, UI_HINTS_CONFIG)
+
+
+def contexto_config(tipo) -> dict:
+    """Contexto da aba Config (campos schema-driven), usado na página de edição."""
+    return {"campos_config": _campos_config(tipo.config.get_all())}
 
 
 def _formatar_erros(erro: ValidationError) -> str:
@@ -128,22 +201,14 @@ def excluir(id: str, request: Request):
 @router.get("/{id}/editar", response_class=HTMLResponse)
 def pagina_editar(id: str, request: Request):
     tipo = carregar_tipo(id)
-    # merge raso com os padrões: tipos criados antes da seção "imagens" existir
-    # ainda renderizam o formulário (o primeiro salvar persiste a seção).
-    config = {**DEFAULT_CONFIG, **tipo.config.get_all()}
     return templates.TemplateResponse(
         "tipos_editar.html",
         {
             "request": request,
             "tipo": tipo,
-            "config": config,
             "erro": None,
             "sucesso": False,
-            "aspect_ratios": list(ASPECT_RATIOS),
-            "frequencias": FREQUENCIAS,
-            "visibilidades": VISIBILIDADES,
-            "modos_imagem": MODOS_IMAGEM,
-            "posicoes": POSICOES,
+            **contexto_config(tipo),
             **contexto_prompts(tipo),
             **contexto_descoberta(tipo),
             **contexto_geracao(tipo),
@@ -154,106 +219,26 @@ def pagina_editar(id: str, request: Request):
 
 
 @router.post("/{id}/config", response_class=HTMLResponse)
-def salvar_config(
-    id: str,
-    request: Request,
-    nome: str = Form(...),
-    ativo: str | None = Form(None),
-    groq_modelo: str = Form(...),
-    groq_temperatura: float = Form(...),
-    groq_max_tokens: int = Form(...),
-    together_modelo: str = Form(...),
-    together_steps: int = Form(...),
-    together_aspect_ratio: str = Form(...),
-    imagens_modo: str = Form(...),
-    imagens_largura: int = Form(...),
-    imagens_altura: int = Form(...),
-    personagem_posicao: str = Form(...),
-    personagem_altura_percentual: int = Form(...),
-    personagem_margem_lateral: int = Form(...),
-    personagem_margem_vertical: int = Form(...),
-    tts_idioma: str = Form(...),
-    tts_voz: str = Form(...),
-    tts_velocidade: float = Form(...),
-    tts_pitch: float = Form(...),
-    pipeline_min_chars_por_periodo: int = Form(...),
-    agendamento_frequencia: str = Form(...),
-    agendamento_horario: str = Form(...),
-    agendamento_fuso_horario: str = Form(...),
-    youtube_categoria_id: str = Form(...),
-    youtube_visibilidade: str = Form(...),
-    youtube_tags: str = Form(""),
-    youtube_publicar: str | None = Form(None),
-    youtube_descricao_base: str = Form(""),
-):
-    dados = {
-        "nome": nome.strip(),
-        "ativo": ativo is not None,
-        "groq": {
-            "modelo": groq_modelo,
-            "temperatura": groq_temperatura,
-            "max_tokens": groq_max_tokens,
-        },
-        "together": {
-            "modelo": together_modelo,
-            "steps": together_steps,
-            "aspect_ratio": together_aspect_ratio,
-        },
-        "imagens": {
-            "modo": imagens_modo,
-            "largura": imagens_largura,
-            "altura": imagens_altura,
-            "personagem": {
-                "posicao": personagem_posicao,
-                "altura_percentual": personagem_altura_percentual,
-                "margem_lateral": personagem_margem_lateral,
-                "margem_vertical": personagem_margem_vertical,
-            },
-        },
-        "tts": {
-            "idioma": tts_idioma,
-            "voz": tts_voz,
-            "velocidade": tts_velocidade,
-            "pitch": tts_pitch,
-        },
-        "pipeline": {"min_chars_por_periodo": pipeline_min_chars_por_periodo},
-        "agendamento": {
-            "frequencia": agendamento_frequencia,
-            "horario": agendamento_horario,
-            "fuso_horario": agendamento_fuso_horario,
-        },
-        "youtube": {
-            "categoria_id": youtube_categoria_id,
-            "visibilidade": youtube_visibilidade,
-            "tags": [t.strip() for t in youtube_tags.split(",") if t.strip()],
-            "publicar": youtube_publicar is not None,
-            "descricao_base": youtube_descricao_base.strip(),
-        },
-    }
+async def salvar_config(id: str, request: Request):
+    form = dict(await request.form())
+    dados = formulario.reagrupar(form, CONFIG_TAB_PADRAO, UI_HINTS_CONFIG)
+    dados["nome"] = dados["nome"].strip()
 
     tipo_atual = carregar_tipo(id)
-    # Preserva os blocos editados noutras abas (Descoberta, Geração): esta aba faz
-    # whole-file replace do config.json e os apagaria sem isto.
+    # Preserva os blocos editados noutras abas (Descoberta, Geração, Publicação): esta
+    # aba faz whole-file replace do config.json e os apagaria sem isto.
     atual = tipo_atual.config.get_all()
     dados["descoberta"] = mesclar_descoberta(atual.get("descoberta"))
     dados["geracao"] = mesclar_geracao(atual.get("geracao"))
     dados["publicacao"] = mesclar_publicacao(atual.get("publicacao"), atual.get("youtube"))
-    contexto_base = {
-        "request": request,
-        "tipo": tipo_atual,
-        "aspect_ratios": list(ASPECT_RATIOS),
-        "frequencias": FREQUENCIAS,
-        "visibilidades": VISIBILIDADES,
-        "modos_imagem": MODOS_IMAGEM,
-        "posicoes": POSICOES,
-    }
 
     try:
         validado = TipoConfig(**dados)
     except ValidationError as e:
         return templates.TemplateResponse(
             "_tipos_config_tab.html",
-            {**contexto_base, "config": dados, "erro": _formatar_erros(e), "sucesso": False},
+            {"request": request, "tipo": tipo_atual, "campos_config": _campos_config(dados),
+             "erro": _formatar_erros(e), "sucesso": False},
             status_code=422,
         )
 
@@ -267,5 +252,6 @@ def salvar_config(
 
     return templates.TemplateResponse(
         "_tipos_config_tab.html",
-        {**contexto_base, "tipo": tipo, "config": tipo.config.get_all(), "erro": None, "sucesso": True},
+        {"request": request, "tipo": tipo, "campos_config": _campos_config(tipo.config.get_all()),
+         "erro": None, "sucesso": True},
     )

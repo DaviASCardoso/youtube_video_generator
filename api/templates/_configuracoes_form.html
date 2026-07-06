@@ -1,56 +1,12 @@
+{% import "_form_schema.html" as fs %}
 {% if sucesso %}
 <div class="aviso sucesso">Configurações salvas com sucesso.</div>
 {% endif %}
 {% if erro %}
 <div class="aviso erro">{{ erro }}</div>
 {% endif %}
-<form hx-post="/configuracoes" hx-target="#form-configuracoes" hx-swap="innerHTML">
-  <fieldset>
-    <legend>Execução</legend>
-    <label>
-      <span class="rotulo">Vídeos simultâneos (máximo)</span>
-      <input type="number" name="execucao_max_simultaneo" min="1" step="1"
-             value="{{ config.execucao.max_simultaneo }}" required>
-    </label>
-  </fieldset>
 
-  <fieldset>
-    <legend>Saída</legend>
-    <label>
-      <span class="rotulo">Pasta base de saída</span>
-      <input type="text" name="saida_pasta_base" value="{{ config.saida.pasta_base }}" required>
-    </label>
-  </fieldset>
+{{ fs.render_form(campos, action="/configuracoes", submit="Salvar", target="#form-configuracoes") }}
 
-  <fieldset>
-    <legend>Vídeo</legend>
-    <label>
-      <span class="rotulo">FPS</span>
-      <input type="number" name="video_fps" min="1" max="120" step="1"
-             value="{{ config.video.fps }}" required>
-    </label>
-    <label>
-      <span class="rotulo">Codec de vídeo</span>
-      <input list="codecs-video" name="video_codec" value="{{ config.video.codec }}" required>
-      <datalist id="codecs-video">
-        <option value="libx264">
-        <option value="libx265">
-        <option value="mpeg4">
-      </datalist>
-    </label>
-    <label>
-      <span class="rotulo">Codec de áudio</span>
-      <input list="codecs-audio" name="video_audio_codec" value="{{ config.video.audio_codec }}" required>
-      <datalist id="codecs-audio">
-        <option value="aac">
-        <option value="mp3">
-        <option value="libmp3lame">
-      </datalist>
-    </label>
-  </fieldset>
-
-  <p><small>As configurações de descoberta de temas (tendências, fit, dedupe, seleção)
-  agora são por tipo de vídeo — veja a aba <strong>Descoberta</strong> na edição de cada tipo.</small></p>
-
-  <button type="submit">Salvar</button>
-</form>
+<p><small>As configurações de descoberta de temas (tendências, fit, dedupe, seleção)
+são por tipo de vídeo — veja a aba <strong>Descoberta</strong> na edição de cada tipo.</small></p>

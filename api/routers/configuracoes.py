@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from pydantic import ValidationError
 
+from api import formulario
 from api.schemas import SistemaConfig
 from operacoes import scheduler as scheduler_mod
 from api.templating import templates
-from config.sistema import sistema
+from config.sistema import sistema, SISTEMA_PADRAO, UI_HINTS
 
 router = APIRouter(prefix="/configuracoes", tags=["configuracoes"])
 
@@ -18,45 +19,29 @@ def _formatar_erros(erro: ValidationError) -> str:
     return "; ".join(partes)
 
 
+def _campos(atual: dict) -> list:
+    return formulario.arvore(SISTEMA_PADRAO, atual, UI_HINTS)
+
+
 @router.get("", response_class=HTMLResponse)
 def pagina_configuracoes(request: Request):
     return templates.TemplateResponse(
         "configuracoes.html",
-        {
-            "request": request,
-            "config": sistema.get_all(),
-            "erro": None,
-            "sucesso": False,
-        },
+        {"request": request, "campos": _campos(sistema.get_all()), "erro": None, "sucesso": False},
     )
 
 
 @router.post("", response_class=HTMLResponse)
-def salvar_configuracoes(
-    request: Request,
-    execucao_max_simultaneo: int = Form(...),
-    saida_pasta_base: str = Form(...),
-    video_fps: int = Form(...),
-    video_codec: str = Form(...),
-    video_audio_codec: str = Form(...),
-):
-    dados = {
-        "execucao": {"max_simultaneo": execucao_max_simultaneo},
-        "saida": {"pasta_base": saida_pasta_base},
-        "video": {"fps": video_fps, "codec": video_codec, "audio_codec": video_audio_codec},
-    }
+async def salvar_configuracoes(request: Request):
+    form = dict(await request.form())
+    dados = formulario.reagrupar(form, SISTEMA_PADRAO, UI_HINTS)
 
     try:
         validado = SistemaConfig(**dados)
     except ValidationError as e:
         return templates.TemplateResponse(
             "_configuracoes_form.html",
-            {
-                "request": request,
-                "config": dados,
-                "erro": _formatar_erros(e),
-                "sucesso": False,
-            },
+            {"request": request, "campos": _campos(dados), "erro": _formatar_erros(e), "sucesso": False},
             status_code=422,
         )
 
@@ -65,10 +50,5 @@ def salvar_configuracoes(
 
     return templates.TemplateResponse(
         "_configuracoes_form.html",
-        {
-            "request": request,
-            "config": sistema.get_all(),
-            "erro": None,
-            "sucesso": True,
-        },
+        {"request": request, "campos": _campos(sistema.get_all()), "erro": None, "sucesso": True},
     )

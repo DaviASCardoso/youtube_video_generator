@@ -13,6 +13,8 @@
            {% if c.passo %}step="{{ c.passo }}"{% endif %}
            {% if c.minimo is not none %}min="{{ c.minimo }}"{% endif %}
            {% if c.maximo is not none %}max="{{ c.maximo }}"{% endif %}>
+  {% elif c.tipo == 'time' %}
+    <input type="time" name="{{ c.nome }}" value="{{ c.valor if c.valor is not none else '' }}">
   {% elif c.tipo == 'select' %}
     <select name="{{ c.nome }}">
       {% for valor, rotulo in c.opcoes %}<option value="{{ valor }}" {% if c.valor == valor %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
