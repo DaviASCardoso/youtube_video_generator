@@ -171,3 +171,23 @@ pre.log {
   background: var(--cor-primaria);
   color: #fff;
 }
+
+/* Formulário schema-driven */
+.campo-schema .ajuda { display: block; opacity: 0.75; }
+.campo-schema .padrao { display: block; opacity: 0.55; font-size: 0.8em; }
+.badge-override {
+  font-size: 0.7em;
+  background: var(--cor-primaria);
+  color: #fff;
+  border-radius: 3px;
+  padding: 0.05rem 0.3rem;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
+details.avancado {
+  border: 1px solid var(--cor-borda);
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  margin: 0.6rem 0;
+}
+details.avancado > summary { cursor: pointer; font-weight: 600; }

@@ -1,0 +1,59 @@
+{# Macros do formulário schema-driven. Uso:
+   {% import "_form_schema.html" as fs %}
+   {{ fs.render_form(campos, action="/tipos/<id>/<pilar>", submit="Salvar", target="#<pilar>-tab") }}
+#}
+
+{% macro campo(c) %}
+<label class="campo-schema">
+  <span class="rotulo">{{ c.rotulo }}{% if c.override %} <span class="badge-override" title="difere do padrão">modificado</span>{% endif %}</span>
+  {% if c.tipo == 'checkbox' %}
+    <input type="checkbox" name="{{ c.nome }}" {% if c.valor %}checked{% endif %} style="width:auto; display:inline-block; margin-right:0.4rem">
+  {% elif c.tipo == 'number' %}
+    <input type="number" name="{{ c.nome }}" value="{{ c.valor if c.valor is not none else '' }}"
+           {% if c.passo %}step="{{ c.passo }}"{% endif %}
+           {% if c.minimo is not none %}min="{{ c.minimo }}"{% endif %}
+           {% if c.maximo is not none %}max="{{ c.maximo }}"{% endif %}>
+  {% elif c.tipo == 'select' %}
+    <select name="{{ c.nome }}">
+      {% for valor, rotulo in c.opcoes %}<option value="{{ valor }}" {% if c.valor == valor %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+    </select>
+  {% elif c.tipo == 'lista' %}
+    <textarea name="{{ c.nome }}" rows="3">{{ c.valor | join('\n') }}</textarea>
+  {% elif c.tipo == 'textarea' %}
+    <textarea name="{{ c.nome }}" rows="4">{{ c.valor if c.valor is not none else '' }}</textarea>
+  {% else %}
+    <input type="text" name="{{ c.nome }}" value="{{ c.valor if c.valor is not none else '' }}">
+  {% endif %}
+  {% if c.ajuda %}<small class="ajuda">{{ c.ajuda }}</small>{% endif %}
+  <small class="padrao">padrão: {{ c.default_exibicao }}</small>
+</label>
+{% endmacro %}
+
+{% macro render_itens(itens) %}
+  {% for it in itens %}
+    {% if it.kind == 'grupo' %}
+      {% if it.avancado %}
+      <details class="avancado">
+        <summary>{{ it.rotulo }}</summary>
+        {% if it.ajuda %}<p><small>{{ it.ajuda }}</small></p>{% endif %}
+        {{ render_itens(it.itens) }}
+      </details>
+      {% else %}
+      <fieldset>
+        <legend>{{ it.rotulo }}</legend>
+        {% if it.ajuda %}<p><small>{{ it.ajuda }}</small></p>{% endif %}
+        {{ render_itens(it.itens) }}
+      </fieldset>
+      {% endif %}
+    {% else %}
+      {{ campo(it) }}
+    {% endif %}
+  {% endfor %}
+{% endmacro %}
+
+{% macro render_form(itens, action, submit='Salvar', target='', swap='innerHTML') %}
+<form hx-post="{{ action }}" {% if target %}hx-target="{{ target }}" hx-swap="{{ swap }}"{% endif %}>
+  {{ render_itens(itens) }}
+  <button type="submit">{{ submit }}</button>
+</form>
+{% endmacro %}
