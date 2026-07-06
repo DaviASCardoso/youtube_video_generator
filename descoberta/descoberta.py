@@ -16,6 +16,7 @@ from descoberta.candidato import Decisao, agora
 from descoberta.configuracao import FONTES_DISPONIVEIS, mesclar_descoberta
 from descoberta.fontes import base
 from descoberta.tendencias import historico_tendencias
+from operacoes import notificacoes
 
 # Importa os módulos de fonte para disparar o registro (@base.registrar).
 from descoberta.fontes import (  # noqa: F401
@@ -134,6 +135,12 @@ def decidir_tema(tipo, persistir: bool = True) -> Decisao | None:
             estado.buffer_de(tipo).substituir(nao_escolhidos)
         else:
             estado.buffer_de(tipo).limpar()
+        if decisao.estado == "pendente":  # gate de revisão da Descoberta
+            notificacoes.emitir(
+                "revisao_pendente",
+                f"Tema aguardando aprovação — {tipo.nome}",
+                f"Tema decidido: {decisao.tema}",
+            )
 
     return decisao
 

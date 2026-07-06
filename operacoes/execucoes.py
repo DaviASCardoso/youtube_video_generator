@@ -10,6 +10,7 @@ from config.tipos import TipoVideo
 from config.sistema import sistema
 from geracao.custo import Ledger
 from geracao.pipeline import gerar_video
+from operacoes import notificacoes
 
 _HISTORICO_PATH = Path(__file__).parent.parent / "execucoes" / "historico.json"
 
@@ -419,6 +420,11 @@ def executar_com_captura(
         return caminho
     except Exception as e:
         historico.falhar(execucao["id"], str(e))
+        notificacoes.emitir(
+            "run_falhou",
+            f"Falha na geração — {tipo.nome}",
+            f"Tema: {tema}\n{e}",
+        )
         raise
     finally:
         _proxy.desativar()

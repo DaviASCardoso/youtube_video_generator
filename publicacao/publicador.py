@@ -17,6 +17,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from config.tipos import carregar_tipo
+from operacoes import notificacoes
 from publicacao import metadados as metadados_mod
 from publicacao import thumbnail as thumbnail_mod
 from publicacao.configuracao import mesclar_publicacao
@@ -78,6 +79,12 @@ def _subir_aos_destinos(tipo, pasta_run, execucao_id, metadados, thumb_path, cfg
             continue
 
         cred = destino.checar_credencial(tipo)
+        if cred["status"] in ("expirando", "expirado", "ausente"):
+            notificacoes.emitir(
+                "credencial",
+                f"Credencial {cred['status']} — {tipo.nome}",
+                f"Destino {nome}: {cred.get('detalhe', '')}",
+            )
         if cred["status"] in ("ausente", "expirado"):
             print(f"    [{nome}] credencial {cred['status']}: {cred['detalhe']} — pulando")
             historico.registrar_publicacao_destino(
@@ -89,6 +96,11 @@ def _subir_aos_destinos(tipo, pasta_run, execucao_id, metadados, thumb_path, cfg
         if not checar_cap(quota_diaria.uploads_hoje(credencial), cfg["quota"]["cap_diario"]):
             print(f"    [{nome}] cota diária atingida — adiando para amanhã")
             historico.registrar_publicacao_destino(execucao_id, nome, {"status": "adiado_cota"})
+            notificacoes.emitir(
+                "cota_atingida",
+                f"Cota de upload atingida — {tipo.nome}",
+                f"Destino {nome}: cap diário atingido; adiado para amanhã.",
+            )
             continue
 
         opcoes = _montar_opcoes(cfg, dcfg)
@@ -129,6 +141,11 @@ def publicar(tipo, pasta_run, execucao_id, ledger=None) -> str:
     if cfg["revisao"] == "revisar":
         print("Publicação em modo revisão — metadados/thumbnail prontos, aguardando aprovação.")
         historico.marcar_aguardando_publicacao(execucao_id)
+        notificacoes.emitir(
+            "revisao_pendente",
+            f"Vídeo aguardando aprovação — {tipo.nome}",
+            "Um vídeo está pronto e aguarda aprovação para publicar.",
+        )
         return "aguardando_revisao"
 
     _subir_aos_destinos(tipo, pasta_run, execucao_id, metadados, thumb_path, cfg, ledger)
