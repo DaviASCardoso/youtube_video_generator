@@ -44,12 +44,15 @@ def _parsear(resposta: str) -> dict:
 
 
 def _system_prompt(assets_dir: Path) -> str:
+    from feedback import guia
+
     caminho = Path(assets_dir) / "system_prompt_metadados.txt"
+    base = _PROMPT_PADRAO
     if caminho.exists():
         texto = caminho.read_text(encoding="utf-8").strip()
         if texto:
-            return texto
-    return _PROMPT_PADRAO
+            base = texto
+    return guia.compor(assets_dir, "metadados", base)
 
 
 def _user_prompt(tema: str, roteiro: str, cfg_meta: dict) -> str:

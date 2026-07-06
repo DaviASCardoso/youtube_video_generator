@@ -2,6 +2,7 @@ from groq import Groq
 from dotenv import load_dotenv
 from pathlib import Path
 from config.settings import Config
+from feedback import guia
 import os
 import json
 import re
@@ -60,8 +61,14 @@ def _parsear_prompts(resposta: str) -> list[str]:
 def gerar_roteiro(
     prompt: str, config: Config, assets_dir: Path
 ) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
-    system_prompt_script = (assets_dir / "system_prompt_script.txt").read_text(encoding="utf-8").strip()
-    system_prompt_prompt = (assets_dir / "system_prompt_prompt.txt").read_text(encoding="utf-8").strip()
+    system_prompt_script = guia.compor(
+        assets_dir, "roteiro",
+        (assets_dir / "system_prompt_script.txt").read_text(encoding="utf-8").strip(),
+    )
+    system_prompt_prompt = guia.compor(
+        assets_dir, "visual",
+        (assets_dir / "system_prompt_prompt.txt").read_text(encoding="utf-8").strip(),
+    )
 
     roteiro = _chamar_api(system_prompt_script, prompt, config)
 

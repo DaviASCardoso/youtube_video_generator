@@ -59,12 +59,15 @@ def _parsear(resposta: str) -> dict:
 
 
 def _system_prompt(assets_dir: Path, fonte_fundo: str) -> str:
+    from feedback import guia
+
     caminho = Path(assets_dir) / "system_prompt_thumbnail.txt"
+    base = _PROMPT_PADRAO_PEXELS if fonte_fundo == "pexels" else _PROMPT_PADRAO_FLUX
     if caminho.exists():
         texto = caminho.read_text(encoding="utf-8").strip()
         if texto:
-            return texto
-    return _PROMPT_PADRAO_PEXELS if fonte_fundo == "pexels" else _PROMPT_PADRAO_FLUX
+            base = texto
+    return guia.compor(assets_dir, "thumbnail", base)
 
 
 def _texto_e_diretriz(sidecar, config, assets_dir, fonte_fundo, ledger) -> tuple[str, str]:

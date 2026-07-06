@@ -11,6 +11,7 @@ editável no painel como os demais prompts.
 from pathlib import Path
 
 from config.settings import Config
+from feedback import guia
 from geracao.compositor import EMOCAO_PADRAO, EMOCOES
 from geracao.generate_script import _chamar_api, _parsear_prompts, _separar_periodos
 
@@ -39,15 +40,17 @@ def gerar_cenas(
         Lista de (indice, frase, emocao, termo_busca), 1:1 com as frases do
         roteiro — mesma invariante de contagem do modo "ia".
     """
-    system_prompt_script = (
-        (assets_dir / "system_prompt_script.txt").read_text(encoding="utf-8").strip()
+    system_prompt_script = guia.compor(
+        assets_dir, "roteiro",
+        (assets_dir / "system_prompt_script.txt").read_text(encoding="utf-8").strip(),
     )
     roteiro = _chamar_api(system_prompt_script, prompt, config)
 
     frases = _separar_periodos(roteiro, config.get("pipeline.min_chars_por_periodo"))
 
-    system_prompt_cena = (
-        (assets_dir / "system_prompt_cena.txt").read_text(encoding="utf-8").strip()
+    system_prompt_cena = guia.compor(
+        assets_dir, "visual",
+        (assets_dir / "system_prompt_cena.txt").read_text(encoding="utf-8").strip(),
     )
     numeradas = "\n".join(f"{i}. {f}" for i, f in enumerate(frases, start=1))
     resposta = _chamar_api(system_prompt_cena, numeradas, config)

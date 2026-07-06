@@ -101,9 +101,12 @@ def _default_prompt_tendencia() -> str:
 
 
 def _prompt_do_tipo(tipo) -> str:
+    from feedback import guia
+
     caminho = tipo.assets_dir / "system_prompt_tendencia.txt"
+    base = _default_prompt_tendencia()
     if caminho.exists():
         conteudo = caminho.read_text(encoding="utf-8").strip()
         if conteudo:
-            return conteudo
-    return _default_prompt_tendencia()
+            base = conteudo
+    return guia.compor(tipo.assets_dir, "fit", base)
