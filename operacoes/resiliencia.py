@@ -264,7 +264,7 @@ def executar(
     refresh=None,
     contexto: dict | None = None,
     relatorio: dict | None = None,
-    dormir=time.sleep,
+    dormir=None,
     _rng=random,
     _circuitos=None,
 ):
@@ -290,6 +290,8 @@ def executar(
         O resultado de `fn()` (ou do failover).
     """
     circ = _circuitos if _circuitos is not None else circuitos
+    # Resolvido em tempo de chamada (não como default) para ser monkeypatchável nos testes.
+    _dormir = dormir if dormir is not None else time.sleep
     contexto = contexto or {}
     rel = relatorio if relatorio is not None else {}
 
@@ -339,7 +341,7 @@ def executar(
                 break  # retry furaria o orçamento — para (resiliência não é isenta do teto)
             espera = proxima_espera(tentativa - 1, politica, retry_after(e), _rng=_rng)
             if espera:
-                dormir(espera)
+                _dormir(espera)
             continue
         else:
             circ.registrar_sucesso(provedor)

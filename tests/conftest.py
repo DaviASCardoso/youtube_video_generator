@@ -76,6 +76,21 @@ def limpar_env(monkeypatch):
         monkeypatch.delenv(chave, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def circuito_isolado(tmp_path, monkeypatch):
+    """Aponta o store de circuito do motor para um arquivo temporário.
+
+    O singleton `operacoes.circuitos.circuitos` grava em execucoes/circuitos.json;
+    sem isso, um teste que exercita falha (retry/failover) escreveria no disco real.
+    """
+    import operacoes.circuitos as circ_mod
+    import operacoes.resiliencia as resil_mod
+
+    store = circ_mod.RegistroCircuitos(tmp_path / "circuitos.json")
+    monkeypatch.setattr(resil_mod, "circuitos", store)
+    return store
+
+
 def _png_minimo(caminho: Path, cor=(0, 0, 0, 255), tamanho=(20, 40)) -> Path:
     """Escreve um PNG RGBA minúsculo (para testes do compositor)."""
     caminho.parent.mkdir(parents=True, exist_ok=True)

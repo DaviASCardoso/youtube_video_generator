@@ -39,11 +39,17 @@ from geracao.generate_image import ASPECT_RATIOS
 from geracao.generate_voice import gerar_narracao  # noqa: F401 (mantido p/ compat de testes)
 from geracao.provedores import base as provedores
 from geracao.variacao import Variacao
+from operacoes import resiliencia
 
 # Backoff entre tentativas (segundos, base do crescimento exponencial). Os provedores
 # mockados dos testes acertam na 1ª tentativa, então o sleep nunca é exercido lá.
+# Mantidos por compat; o retry/backoff de fato agora vem do motor (resiliencia.executar).
 ESPERA_BACKOFF = 2.0
 TENTATIVAS = 3
+
+# Provedor externo por trás de cada papel — chave do circuit breaker (agrega falhas
+# por serviço real, não por nome de config). Visuais mapeia por modo (flux/pexels).
+_PROVEDOR_CIRCUITO = {"roteiro": "groq", "narracao": "google"}
 
 _CUSTO_PREVISTO_VISUAL = {"flux": CUSTO_FLUX_IMAGEM, "pexels": CUSTO_PEXELS, "placeholder": 0.0}
 
@@ -100,7 +106,7 @@ def _escrever_roteiro(caminho: Path, frases: list) -> None:
     caminho.write_text("\n".join(str(f[1]) for f in frases), encoding="utf-8")
 
 
-def _estagio_roteiro(tema, tipo, base, cfg_ger, var, led, reaproveitar):
+def _estagio_roteiro(tema, tipo, base, cfg_ger, politica, var, led, reaproveitar):
     caminho = base / "roteiro.txt"
     if deve_reaproveitar(caminho, reaproveitar):
         print(f"Reaproveitando roteiro de {caminho}")
@@ -108,8 +114,12 @@ def _estagio_roteiro(tema, tipo, base, cfg_ger, var, led, reaproveitar):
     else:
         print("Gerando roteiro...")
         prov = provedores.obter(provedores.PAPEL_ROTEIRO, cfg_ger["roteiro"]["provedor"])
-        frases = _tentar(
-            lambda: prov.gerar(tema, tipo.config, tipo.assets_dir, variacao=var, ledger=led)
+        frases = resiliencia.executar(
+            lambda: prov.gerar(tema, tipo.config, tipo.assets_dir, variacao=var, ledger=led),
+            estagio="roteiro",
+            provedor=_PROVEDOR_CIRCUITO["roteiro"],
+            politica=politica,
+            contexto={"tema": tema, "tipo": tipo.id},
         )
         _escrever_roteiro(caminho, frases)
         print(f"Roteiro salvo em: {caminho}")
@@ -151,7 +161,7 @@ def _ler_cenas(caminho: Path) -> list[dict]:
     return dados
 
 
-def _estagio_plano_visual(frases, tipo, base, cfg_ger, nome_visual, var, led, reaproveitar):
+def _estagio_plano_visual(frases, tipo, base, cfg_ger, politica, nome_visual, var, led, reaproveitar):
     prov = provedores.obter(provedores.PAPEL_VISUAIS, nome_visual)
     if nome_visual == "pexels":
         caminho = base / "cenas.txt"
@@ -165,8 +175,13 @@ def _estagio_plano_visual(frases, tipo, base, cfg_ger, nome_visual, var, led, re
         dados = ler(caminho)
     else:
         print("Planejando visuais...")
-        dados = _tentar(
-            lambda: prov.planejar(frases, tipo.config, tipo.assets_dir, variacao=var, ledger=led)
+        # O plano visual (emoção/prompt por frase) roda no Groq — mesmo circuito do roteiro.
+        dados = resiliencia.executar(
+            lambda: prov.planejar(frases, tipo.config, tipo.assets_dir, variacao=var, ledger=led),
+            estagio="plano_visual",
+            provedor="groq",
+            politica=politica,
+            contexto={"tipo": tipo.id},
         )
         escrever(caminho, dados)
         print(f"Plano visual salvo em: {caminho}")
@@ -196,24 +211,44 @@ def _salvar_imagem(caminho: Path, imagem) -> None:
         imagem.save(caminho)
 
 
-def _render_resiliente(prov, indice, dado, tipo, nome_visual, var, led, degradar):
+def _render_resiliente(prov, indice, dado, tipo, cfg_ger, nome_visual, previsto, politica, var, led, degradar):
+    def _placeholder_failover(_politica=None):
+        led.registrar("visuais", "placeholder", 0.0)
+        return _placeholder(indice, tipo, nome_visual)
+
     if degradar:
         print(f"  cena {indice}: orçamento apertado — usando placeholder")
-        led.registrar("visuais", "placeholder", 0.0)
-        return _placeholder(indice, tipo, nome_visual)
+        return _placeholder_failover()
+
+    def _cabe_no_orcamento():
+        return checar_orcamento(
+            led.total(), previsto, gasto_diario.gasto_hoje(), cfg_ger["orcamento"]
+        ) != "parar"
+
     try:
-        return _tentar(
+        # O motor casa a resposta à classe do erro: transitório retenta (backoff+jitter,
+        # sem furar o orçamento) e, esgotado, faz failover para o placeholder do pilar.
+        return resiliencia.executar(
             lambda: prov.renderizar(
                 indice, dado, tipo.config, tipo.assets_dir, variacao=var, ledger=led
-            )
+            ),
+            estagio="visuais",
+            provedor=nome_visual,
+            politica=politica,
+            custo_ok=_cabe_no_orcamento,
+            alternativa=_placeholder_failover,
+            contexto={"cena": indice, "tipo": tipo.id},
         )
-    except Exception as e:  # noqa: BLE001
+    except (resiliencia.ResilienciaEsgotada, resiliencia.HaltDestino, resiliencia.Deferir) as e:
+        # Erro classificado (permanente/auth/quota) numa cena isolada → política de
+        # falha parcial: por padrão degrada para placeholder; "falhar" derruba o run.
+        if politica.falha_parcial == "falhar":
+            raise
         print(f"  cena {indice}: visual falhou ({e}) — caindo para placeholder")
-        led.registrar("visuais", "placeholder", 0.0)
-        return _placeholder(indice, tipo, nome_visual)
+        return _placeholder_failover()
 
 
-def _estagio_visuais(frases, prov, dados, tipo, pasta_imagens, cfg_ger, nome_visual, var, led, reaproveitar):
+def _estagio_visuais(frases, prov, dados, tipo, pasta_imagens, cfg_ger, politica, nome_visual, var, led, reaproveitar):
     previsto = _CUSTO_PREVISTO_VISUAL.get(nome_visual, 0.0)
     print("\nGerando visuais...")
     for (indice, _), dado in zip(frases, dados):
@@ -229,7 +264,8 @@ def _estagio_visuais(frases, prov, dados, tipo, pasta_imagens, cfg_ger, nome_vis
                 f"cena {indice}: orçamento excedido (ação 'parar')"
             )
         imagem = _render_resiliente(
-            prov, indice, dado, tipo, nome_visual, var, led, degradar=(decisao == "degradar")
+            prov, indice, dado, tipo, cfg_ger, nome_visual, previsto, politica, var, led,
+            degradar=(decisao == "degradar"),
         )
         _salvar_imagem(caminho, imagem)
         print(f"  cena {indice}/{len(frases)} pronta")
@@ -241,20 +277,30 @@ def _estagio_visuais(frases, prov, dados, tipo, pasta_imagens, cfg_ger, nome_vis
 # --- estágio: narração ----------------------------------------------------
 
 
-def _narrar_resiliente(prov, texto, caminho, tipo, cfg_ger, led):
-    try:
-        return _tentar(lambda: prov.narrar(texto, caminho, tipo.config, ledger=led))
-    except Exception as e:  # noqa: BLE001
-        voz_sec = cfg_ger["narracao"].get("voz_secundaria") or None
-        if voz_sec:
-            print(f"  narração falhou ({e}) — tentando voz secundária '{voz_sec}'")
-            return _tentar(
-                lambda: prov.narrar(texto, caminho, tipo.config, voz=voz_sec, ledger=led)
-            )
-        raise
+def _narrar_resiliente(prov, texto, caminho, tipo, cfg_ger, politica, led):
+    voz_sec = cfg_ger["narracao"].get("voz_secundaria") or None
+
+    def _voz_secundaria(_politica=None):
+        print(f"  narração falhou — tentando voz secundária '{voz_sec}'")
+        return resiliencia.executar(
+            lambda: prov.narrar(texto, caminho, tipo.config, voz=voz_sec, ledger=led),
+            estagio="narracao",
+            provedor="google",
+            politica=politica,
+            contexto={"voz": voz_sec, "tipo": tipo.id},
+        )
+
+    return resiliencia.executar(
+        lambda: prov.narrar(texto, caminho, tipo.config, ledger=led),
+        estagio="narracao",
+        provedor="google",
+        politica=politica,
+        alternativa=(_voz_secundaria if voz_sec else None),
+        contexto={"tipo": tipo.id},
+    )
 
 
-def _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, led, reaproveitar):
+def _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, politica, led, reaproveitar):
     prov = provedores.obter(provedores.PAPEL_NARRACAO, cfg_ger["narracao"]["provedor"])
     print("\nGerando narrações...")
     for indice, frase in frases:
@@ -264,7 +310,7 @@ def _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, led, reaproveitar):
         ):
             print(f"  narração {indice}: reaproveitada")
             continue
-        _narrar_resiliente(prov, frase, caminho, tipo, cfg_ger, led)
+        _narrar_resiliente(prov, frase, caminho, tipo, cfg_ger, politica, led)
         gates.validar_narracao(caminho)
         print(f"  narração {indice}/{len(frases)} gerada")
 
@@ -334,6 +380,7 @@ def gerar_video(
         pasta.mkdir(parents=True, exist_ok=True)
 
     cfg_ger = mesclar_geracao(tipo.config.get_all().get("geracao"))
+    politica = resiliencia.de_tipo(tipo)
     led = ledger if ledger is not None else Ledger()
     var = Variacao(cfg_ger["variacao"])
     reaproveitar = cfg_ger["checkpoint"]["reaproveitar"]
@@ -348,17 +395,17 @@ def gerar_video(
     # Estágios explícitos, cada um checkpointado + com gate de saída. Entre eles,
     # checa o cancelamento cooperativo (fronteira de estágio).
     _checar_cancelamento(cancelado)
-    frases = _estagio_roteiro(tema, tipo, base, cfg_ger, var, led, reaproveitar)
+    frases = _estagio_roteiro(tema, tipo, base, cfg_ger, politica, var, led, reaproveitar)
     _checar_cancelamento(cancelado)
     prov_visual, dados = _estagio_plano_visual(
-        frases, tipo, base, cfg_ger, nome_visual, var, led, reaproveitar
+        frases, tipo, base, cfg_ger, politica, nome_visual, var, led, reaproveitar
     )
     _checar_cancelamento(cancelado)
     _estagio_visuais(
-        frases, prov_visual, dados, tipo, pasta_imagens, cfg_ger, nome_visual, var, led, reaproveitar
+        frases, prov_visual, dados, tipo, pasta_imagens, cfg_ger, politica, nome_visual, var, led, reaproveitar
     )
     _checar_cancelamento(cancelado)
-    _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, led, reaproveitar)
+    _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, politica, led, reaproveitar)
     _checar_cancelamento(cancelado)
     caminho_video, duracao = _estagio_montagem(frases, base, pasta_audio, pasta_imagens, cfg_ger)
 

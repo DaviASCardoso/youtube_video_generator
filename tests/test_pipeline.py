@@ -131,7 +131,7 @@ def ambiente(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline, "ImageClip", _FakeImageClip)
     monkeypatch.setattr(pipeline, "concatenate_videoclips", lambda clipes, **k: video)
     monkeypatch.setattr(pipeline, "gasto_diario", GastoDiario(tmp_path / "custo_diario.json"))
-    monkeypatch.setattr(pipeline, "ESPERA_BACKOFF", 0)
+    monkeypatch.setattr("time.sleep", lambda s: None)  # o motor de resiliência não dorme nos testes
     monkeypatch.setattr(
         pipeline, "_fundo_placeholder", lambda i, w, h: Image.new("RGB", (4, 4))
     )
@@ -310,3 +310,41 @@ def test_narracao_cai_para_voz_secundaria(tmp_path, sistema_temp, make_tipo, amb
 
     caminho = gerar_video("tema", tipo, tmp_path / "out")
     assert caminho == tmp_path / "out" / "video_final.mp4"
+
+
+def test_visual_retenta_e_tem_sucesso(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    """Erro transitório numa cena: o motor retenta no mesmo provedor e obtém sucesso
+    (sem cair para placeholder) — prova o retry dentro do estágio, não só o failover."""
+
+    class _VisualInstavel(_FakeVisuaisFlux):
+        chamadas = 0
+
+        def renderizar(self, indice, dado, config, assets_dir, variacao=None, ledger=None):
+            type(self).chamadas += 1
+            if type(self).chamadas == 1:
+                raise TimeoutError("soluço transitório")
+            return super().renderizar(indice, dado, config, assets_dir, variacao=variacao, ledger=ledger)
+
+    tipo = make_tipo(config_extra={"imagens": {"modo": "ia"}})
+    led = pipeline.Ledger()
+    _instalar_provedores(monkeypatch, visuais=_VisualInstavel())
+
+    gerar_video("tema", tipo, tmp_path / "out", ledger=led)
+
+    assert led.provedores()["visuais"] == "flux"  # retentou e usou o provedor real
+    assert _VisualInstavel.chamadas >= 2
+
+
+def test_falha_parcial_falhar_derruba_o_run(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    """Com falha_parcial='falhar', um erro permanente numa cena derruba o run
+    inteiro em vez de degradar para placeholder."""
+
+    class _VisualPermanente(_FakeVisuaisFlux):
+        def renderizar(self, *a, **k):
+            raise ValueError("entrada inválida")  # classificado como permanente
+
+    tipo = make_tipo(config_extra={"imagens": {"modo": "ia"}, "operacao": {"falha_parcial": "falhar"}})
+    _instalar_provedores(monkeypatch, visuais=_VisualPermanente())
+
+    with pytest.raises(pipeline.resiliencia.ResilienciaEsgotada):
+        gerar_video("tema", tipo, tmp_path / "out", ledger=pipeline.Ledger())
