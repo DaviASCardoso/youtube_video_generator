@@ -193,11 +193,33 @@ def test_iniciar_injeta_reagendador(monkeypatch):
     monkeypatch.setattr(sched, "listar_tipos_ativos", lambda: [])
     monkeypatch.setattr(sched.scheduler, "add_job", lambda *a, **k: None)
     monkeypatch.setattr(sched.scheduler, "start", lambda: None)
+    monkeypatch.setattr(sched.recuperacao, "recuperar_execucoes", lambda fn: [])
     registrado = {}
     monkeypatch.setattr(sched, "definir_reagendador", lambda fn: registrado.update(fn=fn))
 
     sched.iniciar()
     assert registrado["fn"] is sched.reagendar_adiado
+
+
+def test_iniciar_recupera_orfaos(monkeypatch):
+    monkeypatch.setattr(sched, "listar_tipos_ativos", lambda: [])
+    monkeypatch.setattr(sched.scheduler, "add_job", lambda *a, **k: None)
+    monkeypatch.setattr(sched.scheduler, "start", lambda: None)
+    recebido = {}
+    monkeypatch.setattr(
+        sched.recuperacao, "recuperar_execucoes",
+        lambda fn: recebido.update(enfileirar=fn) or [],
+    )
+    sched.iniciar()
+    assert recebido["enfileirar"] is sched._reenfileirar_recuperado
+
+
+def test_reenfileirar_recuperado_reserva_pasta(monkeypatch):
+    capturado = {}
+    monkeypatch.setattr(sched.scheduler, "add_job", lambda *a, **k: capturado.update(kwargs=k))
+    sched._reenfileirar_recuperado("canal", "tema", {"id": "orf"}, "output/x/2026")
+    assert capturado["kwargs"]["args"] == ["canal", "tema", {"id": "orf"}, "output/x/2026"]
+    assert capturado["kwargs"]["id"] == "recuperado-orf"
 
 
 # --- publicar_agora ---

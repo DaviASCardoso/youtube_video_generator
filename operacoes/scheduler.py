@@ -8,7 +8,7 @@ from apscheduler.jobstores.base import JobLookupError
 
 from config.tipos import TipoVideo, listar_tipos_ativos, carregar_tipo
 from config.sistema import sistema
-from operacoes import saude
+from operacoes import recuperacao, saude
 from descoberta import estado
 from descoberta.configuracao import mesclar_descoberta
 from descoberta.descoberta import decidir_tema
@@ -144,6 +144,18 @@ def _job_reservado(tipo_id: str, tema: str, execucao: dict, output_path=None) ->
 
 def _job_publicar(execucao_id: str) -> None:
     publicar_execucao(execucao_id)
+
+
+def _reenfileirar_recuperado(tipo_id: str, tema: str, execucao: dict, output_path) -> None:
+    """Re-enfileira um run órfão (reusa o registro e a pasta) no executor dos jobs."""
+    scheduler.add_job(
+        _job_reservado,
+        trigger="date",
+        run_date=datetime.now(),
+        args=[tipo_id, tema, execucao, output_path],
+        id=f"recuperado-{execucao['id']}",
+        replace_existing=True,
+    )
 
 
 def _job_adiado(tipo_id: str, tema: str, output_path) -> None:
@@ -364,6 +376,7 @@ def atualizar_max_simultaneo(max_simultaneo: int) -> None:
 
 def iniciar() -> None:
     definir_reagendador(reagendar_adiado)  # runs adiados voltam pela janela de reset
+    recuperacao.recuperar_execucoes(_reenfileirar_recuperado)  # retoma órfãos de um reboot
     for tipo in listar_tipos_ativos():
         registrar_job(tipo)
     scheduler.add_job(
