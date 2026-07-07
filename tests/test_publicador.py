@@ -17,6 +17,7 @@ def ambiente(monkeypatch, tmp_path):
 
     monkeypatch.setattr(ex, "historico", hist)
     monkeypatch.setattr(publicador.quota_diaria, "_caminho", tmp_path / "quota.json")
+    monkeypatch.setattr("time.sleep", lambda s: None)  # o motor não dorme nos testes
     # metadados/thumbnail: evita Groq/FLUX; sidecar não precisa existir
     monkeypatch.setattr(
         publicador.metadados_mod, "obter_metadados",
@@ -124,10 +125,29 @@ def test_destino_falho_degrada(make_tipo, ambiente, destino_fake, tmp_path):
     destino_fake.erro = RuntimeError("upload caiu")
     tipo = _tipo_publicando(make_tipo)
     reg = _run(ambiente, tipo, tmp_path / "run")
-    # não levanta; registra erro no destino
+    # não levanta; o motor retenta (transitório) e, esgotado, registra dead-letter
+    # neste destino — os demais seguiriam e o run não quebra.
     publicador.publicar(tipo, tmp_path / "run", reg["id"])
     rec = ambiente.publicacao_de(reg["id"], "youtube")
-    assert rec["status"] == "erro" and "upload caiu" in rec["erro"]
+    assert rec["status"] == "dead_letter"
+    assert "upload caiu" in rec["erro"]
+
+
+def test_destino_cota_no_upload_adia(make_tipo, ambiente, destino_fake, tmp_path):
+    """Um 429 de quota durante o upload é classificado como quota → o destino é adiado
+    (não vira dead-letter)."""
+
+    class _ErroQuota(Exception):
+        status_code = 429
+
+        def __str__(self):
+            return "quota exceeded"
+
+    destino_fake.erro = _ErroQuota()
+    tipo = _tipo_publicando(make_tipo)
+    reg = _run(ambiente, tipo, tmp_path / "run")
+    publicador.publicar(tipo, tmp_path / "run", reg["id"])
+    assert ambiente.publicacao_de(reg["id"], "youtube")["status"] == "adiado_cota"
 
 
 def test_agendado_seta_publish_at(make_tipo, ambiente, tmp_path, monkeypatch):

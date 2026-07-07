@@ -17,7 +17,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from config.tipos import carregar_tipo
-from operacoes import notificacoes
+from operacoes import notificacoes, resiliencia
 from publicacao import metadados as metadados_mod
 from publicacao import thumbnail as thumbnail_mod
 from publicacao.configuracao import mesclar_publicacao
@@ -63,6 +63,7 @@ def _subir_aos_destinos(tipo, pasta_run, execucao_id, metadados, thumb_path, cfg
 
     video_path = Path(pasta_run) / "video_final.mp4"
     disclosure = cfg["visibilidade"]["disclosure_sintetico"]
+    politica = resiliencia.de_tipo(tipo)
 
     for nome, dcfg in _destinos_ativos(cfg):
         # Idempotência: um destino já publicado neste run não sobe de novo.
@@ -104,11 +105,48 @@ def _subir_aos_destinos(tipo, pasta_run, execucao_id, metadados, thumb_path, cfg
             continue
 
         opcoes = _montar_opcoes(cfg, dcfg)
+        # O upload passa pelo motor: erro transitório retenta (backoff honrado+jitter,
+        # teto do estágio "publicacao"); a idempotência (publicacao_de acima) reconcilia
+        # antes de reenviar; quota→adia, auth→halt do destino, exaustão→dead-letter. Cada
+        # desfecho **degrada só este destino** — os outros seguem e o run não quebra.
         try:
-            res = destino.publicar(video_path, metadados, thumb_path, opcoes, tipo)
-        except Exception as e:  # noqa: BLE001 (degrada por destino, não derruba o run)
-            print(f"    [{nome}] upload falhou: {e}")
-            historico.registrar_publicacao_destino(execucao_id, nome, {"status": "erro", "erro": str(e)})
+            res = resiliencia.executar(
+                lambda: destino.publicar(video_path, metadados, thumb_path, opcoes, tipo),
+                estagio="publicacao",
+                provedor=nome,
+                politica=politica,
+                contexto={"destino": nome, "tipo": tipo.id, "execucao": execucao_id},
+            )
+        except resiliencia.Deferir:
+            print(f"    [{nome}] limite/cota durante upload — adiando")
+            historico.registrar_publicacao_destino(execucao_id, nome, {"status": "adiado_cota"})
+            notificacoes.emitir(
+                "cota_atingida",
+                f"Cota de upload atingida — {tipo.nome}",
+                f"Destino {nome}: limite atingido no upload; adiado.",
+            )
+            continue
+        except resiliencia.HaltDestino as e:
+            print(f"    [{nome}] credencial durante upload — halt do destino")
+            historico.registrar_publicacao_destino(
+                execucao_id, nome, {"status": "credencial_expirado", "erro": str(e)}
+            )
+            notificacoes.emitir(
+                "credencial",
+                f"Credencial rejeitada no upload — {tipo.nome}",
+                f"Destino {nome}: {e}",
+            )
+            continue
+        except resiliencia.ResilienciaEsgotada as e:  # transitório esgotado / permanente
+            print(f"    [{nome}] upload esgotou a resiliência ({e.classe}): {e}")
+            historico.registrar_publicacao_destino(
+                execucao_id, nome, {"status": "dead_letter", "classe": e.classe, "erro": str(e)}
+            )
+            notificacoes.emitir(
+                "job_dead_letter",
+                f"Upload em dead-letter — {tipo.nome}",
+                f"Destino {nome}\nClasse: {e.classe}\n{e}",
+            )
             continue
 
         quota_diaria.registrar(credencial)

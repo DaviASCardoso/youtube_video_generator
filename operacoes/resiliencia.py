@@ -295,11 +295,14 @@ def executar(
     contexto = contexto or {}
     rel = relatorio if relatorio is not None else {}
 
-    def _failover_ou_dead_letter(classe: str):
+    def _failover_ou_dead_letter(classe: str, causa=None):
         if alternativa is not None and politica.failover:
             rel["failover"] = True
             return alternativa(politica)
-        raise ResilienciaEsgotada(classe, {**contexto, "provedor": provedor, "estagio": estagio})
+        ctx = {**contexto, "provedor": provedor, "estagio": estagio}
+        if causa is not None:
+            ctx["erro"] = str(causa)
+        raise ResilienciaEsgotada(classe, ctx, causa=causa)
 
     estado = circ.estado(provedor, politica)
     if estado == ABERTO:
@@ -313,11 +316,13 @@ def executar(
 
     refrescou = False
     tentativa = 0
+    ultimo_erro = None
     while True:
         try:
             resultado = fn()
         except Exception as e:  # noqa: BLE001
             classe = classificar(e)
+            ultimo_erro = e
             rel.setdefault("classes", []).append(classe)
             ctx = {**contexto, "provedor": provedor, "estagio": estagio, "classe": classe, "erro": str(e)}
 
@@ -347,4 +352,4 @@ def executar(
             circ.registrar_sucesso(provedor)
             return resultado
 
-    return _failover_ou_dead_letter(TRANSITORIO)
+    return _failover_ou_dead_letter(TRANSITORIO, causa=ultimo_erro)
