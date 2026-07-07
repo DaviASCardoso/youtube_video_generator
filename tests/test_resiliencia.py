@@ -136,3 +136,61 @@ def test_retry_after_ausente():
 def test_retry_after_data_http_ignorada():
     # formato de data HTTP não é suportado -> None (backoff normal assume)
     assert R.retry_after(_ErroHeaders({"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"})) is None
+
+
+# --- política e backoff -----------------------------------------------------
+
+
+class _Rng:
+    def __init__(self, v):
+        self.v = v
+
+    def random(self):
+        return self.v
+
+
+def _pol(cfg=None):
+    return R.PoliticaFalhas(cfg)
+
+
+def test_backoff_exponencial_sem_jitter():
+    pol = _pol()  # base 2, teto 60, jitter 0.5 — rng 0.5 zera o jitter
+    r = _Rng(0.5)
+    assert R.proxima_espera(0, pol, _rng=r) == 2.0
+    assert R.proxima_espera(1, pol, _rng=r) == 4.0
+    assert R.proxima_espera(2, pol, _rng=r) == 8.0
+
+
+def test_backoff_limitado_ao_teto():
+    assert R.proxima_espera(10, _pol(), _rng=_Rng(0.5)) == 60.0
+
+
+def test_retry_after_honrado_ignora_exponencial():
+    assert R.proxima_espera(5, _pol(), retry_after_seg=3.0) == 3.0
+
+
+def test_jitter_dentro_da_faixa():
+    pol = _pol()  # jitter 0.5
+    assert R.proxima_espera(0, pol, _rng=_Rng(1.0)) == 3.0   # +50%: 2 + 2*0.5
+    assert R.proxima_espera(0, pol, _rng=_Rng(0.0)) == 1.0   # -50%: 2 - 2*0.5
+
+
+def test_jitter_zero_desliga():
+    pol = _pol({"backoff": {"base_seg": 2.0, "teto_seg": 60.0, "jitter": 0.0}})
+    assert R.proxima_espera(0, pol, _rng=_Rng(0.99)) == 2.0
+
+
+def test_cap_por_estagio():
+    pol = _pol()
+    assert pol.cap("roteiro") == 3
+    assert pol.cap("visuais") == 2
+    assert pol.cap("narracao") == 2
+    assert pol.cap("desconhecido") == 3  # fallback
+
+
+def test_politica_de_tipo(make_tipo):
+    tipo = make_tipo("tipo_teste")
+    pol = R.de_tipo(tipo)
+    assert pol.base == 2.0
+    assert pol.failover is True
+    assert pol.falha_parcial == "degradar"

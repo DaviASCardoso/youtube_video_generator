@@ -23,6 +23,9 @@ que já retenta tudo), a menos que se pareça com validação (então `permanent
 """
 
 import errno
+import random
+
+from operacoes.configuracao import mesclar_operacao
 
 # Classes de erro (== operacoes.configuracao.CLASSES_ERRO).
 TRANSITORIO = "transitorio"
@@ -166,3 +169,48 @@ def retry_after(erro: BaseException) -> float | None:
     except (TypeError, ValueError):
         return None
     return segundos if segundos >= 0 else None
+
+
+# --- Política e backoff -----------------------------------------------------
+
+
+class PoliticaFalhas:
+    """Vista tipada do bloco `operacao` (mesclado) — os knobs que o motor consulta."""
+
+    def __init__(self, cfg: dict | None = None):
+        cfg = mesclar_operacao(cfg)
+        self.caps = cfg["caps_por_estagio"]
+        self.base = cfg["backoff"]["base_seg"]
+        self.teto = cfg["backoff"]["teto_seg"]
+        self.jitter = cfg["backoff"]["jitter"]
+        self.circuito = cfg["circuito"]
+        self.failover = bool(cfg["failover"])
+        self.falha_parcial = cfg["falha_parcial"]
+        self.defer_horas = cfg["defer_horas"]
+
+    def cap(self, estagio: str) -> int:
+        """Nº máximo de tentativas (classe transitória) para um estágio."""
+        return int(self.caps.get(estagio, 3))
+
+
+def de_tipo(tipo) -> PoliticaFalhas:
+    """Constrói a política a partir do bloco `operacao` de um tipo."""
+    return PoliticaFalhas(tipo.config.get_all().get("operacao"))
+
+
+def proxima_espera(tentativa: int, politica: PoliticaFalhas, retry_after_seg=None, _rng=random) -> float:
+    """Segundos a esperar antes da próxima tentativa.
+
+    Honra o `Retry-After` do servidor quando presente (sem chute, sem jitter — o
+    servidor já deconflita). Senão, backoff exponencial `base·2^tentativa`, limitado
+    ao teto, com jitter (fração ±) para os retries não sincronizarem num rebanho.
+    """
+    if retry_after_seg is not None:
+        return max(0.0, float(retry_after_seg))
+
+    espera = politica.base * (2 ** tentativa)
+    espera = min(espera, politica.teto)
+    if politica.jitter > 0:
+        delta = espera * politica.jitter * (_rng.random() * 2 - 1)
+        espera = max(0.0, espera + delta)
+    return min(espera, politica.teto)
