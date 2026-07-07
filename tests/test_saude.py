@@ -56,6 +56,32 @@ def test_scheduler_rodando(monkeypatch):
     assert saude.scheduler_rodando() is False
 
 
+def test_heartbeat_fresco(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    caminho = tmp_path / "hb.json"
+    agora = datetime(2026, 7, 7, 12, 0, tzinfo=timezone.utc)
+    saude.registrar_heartbeat(agora=agora, caminho=caminho)
+    hb = saude.heartbeat(agora=agora + timedelta(hours=1), caminho=caminho)
+    assert hb["idade_seg"] == 3600.0
+    assert hb["estagnado"] is False
+
+
+def test_heartbeat_estagnado(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    caminho = tmp_path / "hb.json"
+    agora = datetime(2026, 7, 7, 0, 0, tzinfo=timezone.utc)
+    saude.registrar_heartbeat(agora=agora, caminho=caminho)
+    hb = saude.heartbeat(agora=agora + timedelta(hours=14), caminho=caminho)
+    assert hb["estagnado"] is True
+
+
+def test_heartbeat_ausente_nao_alarma(tmp_path):
+    hb = saude.heartbeat(caminho=tmp_path / "inexistente.json")
+    assert hb == {"quando": None, "idade_seg": None, "estagnado": False}
+
+
 # --- custo / orçamento / cota -----------------------------------------------
 
 

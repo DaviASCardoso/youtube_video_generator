@@ -250,6 +250,62 @@ def test_cancelar_pede_cancelamento(monkeypatch):
     assert chamado == ["EXEC-9"]
 
 
+# --- enablement de job por pilar (operacao.jobs.*) ---
+
+
+def _capturar_jobs(monkeypatch):
+    ids_add, ids_rem = [], []
+    monkeypatch.setattr(sched.scheduler, "add_job", lambda *a, **k: ids_add.append(k["id"]))
+    monkeypatch.setattr(sched, "_remover", lambda jid: ids_rem.append(jid))
+    return ids_add, ids_rem
+
+
+def test_registrar_job_registra_ambos_por_padrao(make_tipo, monkeypatch):
+    tipo = make_tipo("t1", config_extra={"descoberta": {"antecedencia_horas": 5}})
+    ids_add, _ = _capturar_jobs(monkeypatch)
+    sched.registrar_job(tipo)
+    assert "t1" in ids_add
+    assert f"t1{sched._SUFIXO_DESCOBERTA}" in ids_add
+
+
+def test_registrar_job_desliga_geracao(make_tipo, monkeypatch):
+    tipo = make_tipo("t1", config_extra={"operacao": {"jobs": {"geracao": False}}})
+    ids_add, ids_rem = _capturar_jobs(monkeypatch)
+    sched.registrar_job(tipo)
+    assert "t1" not in ids_add  # job de geração não é agendado
+    assert "t1" in ids_rem  # e é removido se existia
+
+
+def test_registrar_job_desliga_descoberta(make_tipo, monkeypatch):
+    tipo = make_tipo(
+        "t1",
+        config_extra={
+            "descoberta": {"antecedencia_horas": 5},
+            "operacao": {"jobs": {"descoberta": False}},
+        },
+    )
+    ids_add, ids_rem = _capturar_jobs(monkeypatch)
+    sched.registrar_job(tipo)
+    assert "t1" in ids_add  # geração segue
+    assert f"t1{sched._SUFIXO_DESCOBERTA}" not in ids_add  # descoberta não
+    assert f"t1{sched._SUFIXO_DESCOBERTA}" in ids_rem
+
+
+def test_job_feedback_pula_tipo_desligado(make_tipo, monkeypatch):
+    from feedback import ingestao
+    from feedback import feedback as orq
+
+    t1 = make_tipo("t1", config_extra={"operacao": {"jobs": {"feedback": False}}})
+    t2 = make_tipo("t2")
+    monkeypatch.setattr(sched, "listar_tipos_ativos", lambda: [t1, t2])
+    processados = []
+    monkeypatch.setattr(ingestao, "ingerir", lambda tipo: None)
+    monkeypatch.setattr(orq, "processar", lambda tipo: processados.append(tipo.id))
+
+    sched._job_feedback()
+    assert processados == ["t2"]  # t1 tem o job de feedback desligado
+
+
 # --- _job_feedback (ingestão + processamento por tipo ativo) ---
 
 

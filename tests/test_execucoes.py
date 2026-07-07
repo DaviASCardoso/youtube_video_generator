@@ -242,6 +242,18 @@ def test_publicar_falha_global_nao_derruba(make_tipo, monkeypatch, tmp_path):
     assert execucoes._publicar_se_configurado("EX", tipo, tmp_path / "video_final.mp4") == "erro"
 
 
+def test_publicacao_desativada_por_job_pula(make_tipo, monkeypatch, tmp_path):
+    tipo = make_tipo(config_extra={"operacao": {"jobs": {"publicacao": False}}})
+    import publicacao.publicador as pub
+
+    def nao_deveria(*a, **k):
+        raise AssertionError("publicador não deveria ser chamado com o job desligado")
+
+    monkeypatch.setattr(pub, "publicar", nao_deveria)
+    out = execucoes._publicar_se_configurado("EX", tipo, tmp_path / "video_final.mp4")
+    assert out == "desativado"
+
+
 def test_executar_com_captura_gera_e_conclui_sem_destino(
     make_tipo, monkeypatch, tmp_path, sistema_temp
 ):

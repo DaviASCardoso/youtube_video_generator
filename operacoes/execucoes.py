@@ -452,6 +452,14 @@ def _publicar_se_configurado(execucao_id: str, tipo: TipoVideo, caminho_video: P
     disco. Devolve o desfecho (ver `publicador.publicar`): "sem_destino",
     "aguardando_revisao" ou "publicado".
     """
+    # Interruptor de job da Operação: a publicação pode ser desligada por tipo sem mexer
+    # nos destinos (gera mas não publica). Operações lê/enforça; o valor mora no bloco.
+    from operacoes.configuracao import mesclar_operacao
+
+    if not mesclar_operacao(tipo.config.get_all().get("operacao"))["jobs"].get("publicacao", True):
+        print("Publicação desativada para o tipo (operacao.jobs.publicacao=false) — pulando.")
+        return "desativado"
+
     # import tardio: só puxa Publicação (e as libs do Google) quando o run termina
     from publicacao import publicador
 

@@ -12,6 +12,7 @@ from operacoes import recuperacao, saude
 from descoberta import estado
 from descoberta.configuracao import mesclar_descoberta
 from descoberta.descoberta import decidir_tema
+from operacoes.configuracao import mesclar_operacao
 from operacoes.execucoes import (
     ExecucaoEmAndamentoError,
     definir_reagendador,
@@ -48,6 +49,12 @@ _DIAS_SEMANA = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 def _antecedencia(tipo: TipoVideo) -> int:
     cfg = mesclar_descoberta(tipo.config.get_all().get("descoberta"))
     return cfg["antecedencia_horas"]
+
+
+def _jobs_do_tipo(tipo: TipoVideo) -> dict:
+    """Interruptores de job por pilar (`operacao.jobs.*`) do tipo. Operações lê/enforça
+    o enablement; o valor mora no bloco `operacao` do tipo."""
+    return mesclar_operacao(tipo.config.get_all().get("operacao"))["jobs"]
 
 
 def _configurar_trigger(tipo: TipoVideo) -> CronTrigger:
@@ -184,8 +191,10 @@ def reagendar_adiado(tipo: TipoVideo, tema: str, output_path, quando: datetime) 
 
 
 def _job_saude() -> None:
-    """Check periódico de saúde: emite ntfy para disco baixo / credencial expirando."""
+    """Check periódico de saúde: grava a batida do scheduler e emite ntfy para disco
+    baixo / credencial expirando."""
     try:
+        saude.registrar_heartbeat()  # prova de que o scheduler dispara jobs
         saude.verificar_e_alertar()
     except Exception as e:  # noqa: BLE001
         print(f"[saude] falha no check periódico: {e}")
@@ -198,6 +207,8 @@ def _job_feedback() -> None:
     from feedback import ingestao, feedback as orquestrador
 
     for tipo in listar_tipos_ativos():
+        if not _jobs_do_tipo(tipo).get("feedback", True):
+            continue  # job de feedback desligado para este tipo
         try:
             ingestao.ingerir(tipo)
             orquestrador.processar(tipo)
@@ -207,18 +218,24 @@ def _job_feedback() -> None:
 
 def registrar_job(tipo: TipoVideo) -> None:
     """Agenda (ou reagenda) os jobs de um tipo: a geração no horário configurado e,
-    se `antecedencia_horas` > 0, a descoberta esse tanto de horas antes."""
-    scheduler.add_job(
-        _job_agendado,
-        trigger=_configurar_trigger(tipo),
-        args=[tipo.id],
-        id=tipo.id,
-        replace_existing=True,
-    )
+    se `antecedencia_horas` > 0, a descoberta esse tanto de horas antes. Respeita os
+    interruptores `operacao.jobs.{geracao,descoberta}` — um job desligado é removido."""
+    jobs = _jobs_do_tipo(tipo)
+
+    if jobs.get("geracao", True):
+        scheduler.add_job(
+            _job_agendado,
+            trigger=_configurar_trigger(tipo),
+            args=[tipo.id],
+            id=tipo.id,
+            replace_existing=True,
+        )
+    else:
+        _remover(tipo.id)
 
     id_descoberta = f"{tipo.id}{_SUFIXO_DESCOBERTA}"
     horas = _antecedencia(tipo)
-    if horas > 0:
+    if horas > 0 and jobs.get("descoberta", True):
         scheduler.add_job(
             _job_descoberta,
             trigger=_trigger_descoberta(tipo, horas),
