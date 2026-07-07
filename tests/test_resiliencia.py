@@ -153,6 +153,10 @@ def _pol(cfg=None):
     return R.PoliticaFalhas(cfg)
 
 
+def _pol_circ(limiar=3, cooldown=300, janela=3600):
+    return R.PoliticaFalhas({"circuito": {"limiar_falhas": limiar, "cooldown_seg": cooldown, "janela_saude_seg": janela}})
+
+
 def test_backoff_exponencial_sem_jitter():
     pol = _pol()  # base 2, teto 60, jitter 0.5 — rng 0.5 zera o jitter
     r = _Rng(0.5)
@@ -194,3 +198,161 @@ def test_politica_de_tipo(make_tipo):
     assert pol.base == 2.0
     assert pol.failover is True
     assert pol.falha_parcial == "degradar"
+
+
+# --- policy-engine executar -------------------------------------------------
+
+from operacoes.circuitos import FECHADO, RegistroCircuitos  # noqa: E402
+
+
+@pytest.fixture
+def circ(tmp_path):
+    return RegistroCircuitos(tmp_path / "circuitos.json")
+
+
+def _exec(fn, circ, *, estagio="roteiro", provedor="groq", politica=None, **kw):
+    return R.executar(
+        fn, estagio=estagio, provedor=provedor,
+        politica=politica or _pol(), _circuitos=circ,
+        dormir=lambda s: None, _rng=_Rng(0.5), **kw,
+    )
+
+
+def test_sucesso_de_primeira(circ):
+    rel = {}
+    assert _exec(lambda: "ok", circ, relatorio=rel) == "ok"
+    assert rel.get("tentativas", 0) == 0
+
+
+def test_transitorio_retenta_e_sucede(circ):
+    chamadas = {"n": 0}
+
+    def fn():
+        chamadas["n"] += 1
+        if chamadas["n"] < 3:
+            raise TimeoutError("blip")
+        return "ok"
+
+    rel = {}
+    assert _exec(fn, circ, relatorio=rel) == "ok"
+    assert chamadas["n"] == 3
+    assert rel["tentativas"] == 2
+
+
+def test_transitorio_esgotado_faz_failover(circ):
+    rel = {}
+    out = _exec(lambda: (_ for _ in ()).throw(TimeoutError("morto")), circ,
+                alternativa=lambda pol: "ALT", relatorio=rel)
+    assert out == "ALT"
+    assert rel["failover"] is True
+    assert rel["tentativas"] == 3  # cap do roteiro
+
+
+def test_transitorio_sem_alternativa_dead_letter(circ):
+    with pytest.raises(R.ResilienciaEsgotada) as ei:
+        _exec(lambda: (_ for _ in ()).throw(TimeoutError("morto")), circ)
+    assert ei.value.classe == R.TRANSITORIO
+
+
+def test_permanente_falha_rapido_sem_retry(circ):
+    chamadas = {"n": 0}
+
+    def fn():
+        chamadas["n"] += 1
+        raise ValueError("input ruim")
+
+    with pytest.raises(R.ResilienciaEsgotada) as ei:
+        _exec(fn, circ)
+    assert ei.value.classe == R.PERMANENTE
+    assert chamadas["n"] == 1  # não retentou
+    assert circ.estado("groq", _pol()) == FECHADO  # permanente não abre circuito
+
+
+def test_quota_defere(circ):
+    with pytest.raises(R.Deferir) as ei:
+        _exec(lambda: (_ for _ in ()).throw(_ErroStatus(429, "quota exceeded")), circ)
+    assert ei.value.classe == R.QUOTA
+    assert ei.value.quando_horas == 24
+
+
+def test_orcamento_excedido_defere(circ):
+    from geracao.pipeline import OrcamentoExcedido
+    with pytest.raises(R.Deferir):
+        _exec(lambda: (_ for _ in ()).throw(OrcamentoExcedido("estourou")), circ)
+
+
+def test_auth_refresh_sucede(circ):
+    chamadas = {"n": 0}
+
+    def fn():
+        chamadas["n"] += 1
+        if chamadas["n"] == 1:
+            raise _ErroStatus(401, "expired")
+        return "ok"
+
+    out = _exec(fn, circ, refresh=lambda: True)
+    assert out == "ok"
+    assert chamadas["n"] == 2
+
+
+def test_auth_sem_refresh_halt(circ):
+    with pytest.raises(R.HaltDestino):
+        _exec(lambda: (_ for _ in ()).throw(_ErroStatus(403, "forbidden")), circ)
+
+
+def test_auth_refresh_falho_halt(circ):
+    with pytest.raises(R.HaltDestino):
+        _exec(lambda: (_ for _ in ()).throw(_ErroStatus(401)), circ, refresh=lambda: False)
+
+
+def test_custo_cap_corta_retry(circ):
+    chamadas = {"n": 0}
+
+    def fn():
+        chamadas["n"] += 1
+        raise TimeoutError("blip")
+
+    out = _exec(fn, circ, custo_ok=lambda: False, alternativa=lambda pol: "ALT")
+    assert out == "ALT"
+    assert chamadas["n"] == 1  # parou antes de gastar mais em retry
+
+
+def test_circuito_aberto_pula_para_failover(circ):
+    pol = _pol_circ(limiar=2, cooldown=300)
+    circ.registrar_falha("flux")
+    circ.registrar_falha("flux")  # abre o circuito (2 >= limiar, dentro do cooldown)
+    chamadas = {"n": 0}
+
+    def fn():
+        chamadas["n"] += 1
+        return "nao devia chamar"
+
+    out = _exec(fn, circ, provedor="flux", politica=pol, alternativa=lambda p: "ALT")
+    assert out == "ALT"
+    assert chamadas["n"] == 0  # nem tentou o provedor morto
+
+
+def test_meio_aberto_um_probe_sucesso_fecha(circ):
+    pol = _pol_circ(limiar=2, cooldown=0)  # cooldown 0 -> meio_aberto imediato
+    circ.registrar_falha("flux")
+    circ.registrar_falha("flux")
+    out = _exec(lambda: "ok", circ, provedor="flux", politica=pol)
+    assert out == "ok"
+    assert circ.estado("flux", pol) == FECHADO  # probe ok fechou
+
+
+def test_adaptativo_reduz_retries(circ):
+    pol = _pol_circ(limiar=2, cooldown=300, janela=3600)
+    # 2 falhas recentes, mas circuito fechado (sucesso resetou as consecutivas)
+    circ.registrar_falha("groq")
+    circ.registrar_falha("groq")
+    circ.registrar_sucesso("groq")
+    assert circ.estado("groq", pol) == FECHADO
+    chamadas = {"n": 0}
+
+    def fn():
+        chamadas["n"] += 1
+        raise TimeoutError("flaky o dia todo")
+
+    _exec(fn, circ, politica=pol, alternativa=lambda p: "ALT")
+    assert chamadas["n"] == 1  # cap reduzido (3//2 -> 1) por causa da flakiness recente

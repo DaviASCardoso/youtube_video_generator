@@ -24,7 +24,9 @@ que já retenta tudo), a menos que se pareça com validação (então `permanent
 
 import errno
 import random
+import time
 
+from operacoes.circuitos import ABERTO, MEIO_ABERTO, circuitos
 from operacoes.configuracao import mesclar_operacao
 
 # Classes de erro (== operacoes.configuracao.CLASSES_ERRO).
@@ -214,3 +216,133 @@ def proxima_espera(tentativa: int, politica: PoliticaFalhas, retry_after_seg=Non
         delta = espera * politica.jitter * (_rng.random() * 2 - 1)
         espera = max(0.0, espera + delta)
     return min(espera, politica.teto)
+
+
+# --- Exceções tipadas que sobem para a orquestração -------------------------
+
+
+class Deferir(Exception):
+    """Quota/orçamento estourou: reprogramar o job para quando o recurso reseta."""
+
+    def __init__(self, classe: str, quando_horas: float, contexto: dict | None = None):
+        self.classe = classe
+        self.quando_horas = quando_horas
+        self.contexto = contexto or {}
+        super().__init__(f"deferido ({classe}) por {quando_horas}h: {self.contexto}")
+
+
+class HaltDestino(Exception):
+    """Auth sem refresh possível: halt daquele destino e escalar."""
+
+    def __init__(self, contexto: dict | None = None, causa: BaseException | None = None):
+        self.contexto = contexto or {}
+        self.causa = causa
+        super().__init__(f"halt do destino (auth): {self.contexto}")
+
+
+class ResilienciaEsgotada(Exception):
+    """As estratégias casadas se esgotaram: dead-letter (nunca perdido em silêncio)."""
+
+    def __init__(self, classe: str, contexto: dict | None = None, causa: BaseException | None = None):
+        self.classe = classe
+        self.contexto = contexto or {}
+        self.causa = causa
+        super().__init__(f"resiliência esgotada ({classe}): {self.contexto}")
+
+
+# --- Policy-engine ----------------------------------------------------------
+
+
+def executar(
+    fn,
+    *,
+    estagio: str,
+    provedor: str,
+    politica: PoliticaFalhas,
+    custo_ok=None,
+    alternativa=None,
+    refresh=None,
+    contexto: dict | None = None,
+    relatorio: dict | None = None,
+    dormir=time.sleep,
+    _rng=random,
+    _circuitos=None,
+):
+    """Roda `fn()` casando a resposta à classe do erro (o coração do pilar).
+
+    - **transitório**: retenta até o teto do estágio (backoff honrado+jitter), sem furar
+      o orçamento (`custo_ok`); esgotado → failover para `alternativa` ou dead-letter.
+    - **permanente/recurso**: falha rápido (não retenta, não abre circuito).
+    - **auth**: tenta `refresh()` uma vez; senão `HaltDestino`.
+    - **quota/orçamento**: `Deferir` para a janela em que o recurso reseta.
+    - **circuito aberto** do provedor: pula direto para o failover (não martela um
+      serviço morto); **meio-aberto**: um único probe.
+
+    Args:
+        fn: uma tentativa da chamada externa (`() -> resultado`).
+        estagio/provedor: chaves da política (teto de retry) e do circuito.
+        custo_ok: `() -> bool` — se um novo retry pago ainda cabe no orçamento.
+        alternativa: `(politica) -> resultado` — o failover do pilar (ex.: placeholder).
+        refresh: `() -> bool` — renova a credencial (classe auth); True se renovou.
+        relatorio: dict opcional preenchido com `tentativas`/`failover`/`classes`.
+
+    Returns:
+        O resultado de `fn()` (ou do failover).
+    """
+    circ = _circuitos if _circuitos is not None else circuitos
+    contexto = contexto or {}
+    rel = relatorio if relatorio is not None else {}
+
+    def _failover_ou_dead_letter(classe: str):
+        if alternativa is not None and politica.failover:
+            rel["failover"] = True
+            return alternativa(politica)
+        raise ResilienciaEsgotada(classe, {**contexto, "provedor": provedor, "estagio": estagio})
+
+    estado = circ.estado(provedor, politica)
+    if estado == ABERTO:
+        return _failover_ou_dead_letter(TRANSITORIO)
+
+    cap = politica.cap(estagio)
+    if estado == MEIO_ABERTO:
+        cap = 1  # só um probe
+    elif circ.falhas_recentes(provedor, politica.circuito["janela_saude_seg"]) >= politica.circuito["limiar_falhas"]:
+        cap = max(1, cap // 2)  # adaptativo: provedor flaky → mais conservador
+
+    refrescou = False
+    tentativa = 0
+    while True:
+        try:
+            resultado = fn()
+        except Exception as e:  # noqa: BLE001
+            classe = classificar(e)
+            rel.setdefault("classes", []).append(classe)
+            ctx = {**contexto, "provedor": provedor, "estagio": estagio, "classe": classe, "erro": str(e)}
+
+            if classe == AUTH:
+                if refresh is not None and not refrescou and refresh():
+                    refrescou = True
+                    continue
+                raise HaltDestino(ctx, causa=e)
+            if classe == QUOTA:
+                raise Deferir(QUOTA, politica.defer_horas.get("quota", 24), ctx)
+            if classe in (PERMANENTE, RECURSO):
+                raise ResilienciaEsgotada(classe, ctx, causa=e)
+
+            # transitório: conta como falha do provedor (alimenta o circuito).
+            circ.registrar_falha(provedor)
+            rel["tentativas"] = rel.get("tentativas", 0) + 1
+            tentativa += 1
+            if tentativa >= cap:
+                break
+            if custo_ok is not None and not custo_ok():
+                break  # retry furaria o orçamento — para (resiliência não é isenta do teto)
+            espera = proxima_espera(tentativa - 1, politica, retry_after(e), _rng=_rng)
+            if espera:
+                dormir(espera)
+            continue
+        else:
+            circ.registrar_sucesso(provedor)
+            return resultado
+
+    return _failover_ou_dead_letter(TRANSITORIO)
