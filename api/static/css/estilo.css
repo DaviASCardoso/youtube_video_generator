@@ -132,6 +132,12 @@ th, td {
 .badge.executando { background: #fff3cd; color: var(--cor-aviso); }
 .badge.concluido { background: #e3f2e3; color: var(--cor-sucesso); }
 .badge.erro { background: #fdeaea; color: var(--cor-destaque); }
+.badge.dead_letter { background: #4a1f1f; color: #ffd7d7; }
+.badge.adiado { background: #e7ecff; color: #3348a6; }
+.badge.cancelado { background: #eee; color: #777; }
+.badge.aguardando_publicacao { background: #fff3cd; color: var(--cor-aviso); }
+.badge.rejeitado { background: #fdeaea; color: var(--cor-destaque); }
+.classe-erro { margin-left: 0.35rem; color: #999; font-weight: 600; }
 
 .aviso {
   padding: 0.75rem 1rem;

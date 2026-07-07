@@ -56,6 +56,21 @@ def cancelar(execucao_id: str):
     return RedirectResponse(url=f"/execucoes/{execucao_id}", status_code=303)
 
 
+@router.post("/{execucao_id}/reexecutar")
+def reexecutar(request: Request, execucao_id: str):
+    """Re-enfileira um run parado (dead-letter/adiado/erro) reaproveitando a pasta —
+    o checkpoint retoma de onde parou. Redireciona para o novo run."""
+    try:
+        nova = scheduler_mod.reexecutar_agora(execucao_id)
+    except (ValueError, KeyError, ExecucaoEmAndamentoError) as e:
+        return templates.TemplateResponse(
+            "execucoes_index.html",
+            {"request": request, **_contexto_index(erro=str(e))},
+            status_code=409,
+        )
+    return RedirectResponse(url=f"/execucoes/{nova['id']}", status_code=303)
+
+
 @router.post("", response_class=HTMLResponse)
 def disparar(request: Request, tipo_id: str = Form(...), tema: str = Form("")):
     tipo = carregar_tipo(tipo_id)

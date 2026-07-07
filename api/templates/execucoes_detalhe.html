@@ -6,6 +6,21 @@
 <p><strong>Iniciado em:</strong> {{ execucao.iniciado_em }}</p>
 {% if execucao.finalizado_em %}<p><strong>Finalizado em:</strong> {{ execucao.finalizado_em }}</p>{% endif %}
 {% if execucao.url_publicacao %}<p><strong>YouTube:</strong> <a href="{{ execucao.url_publicacao }}" target="_blank" rel="noopener">{{ execucao.url_publicacao }}</a></p>{% endif %}
+
+{% if execucao.status == 'adiado' and execucao.adiado_para %}
+<div class="aviso">Adiado ({{ execucao.classe }}) — reprogramado para <strong>{{ execucao.adiado_para }}</strong>.</div>
+{% endif %}
+{% if execucao.status == 'dead_letter' %}
+<div class="aviso erro">Dead-letter ({{ execucao.classe }}) — a resiliência se esgotou. Corrija a causa e re-execute (retoma do checkpoint).</div>
+{% endif %}
+
+<p class="observabilidade"><small>
+  {% if execucao.classe %}<strong>Classe:</strong> {{ execucao.classe }} · {% endif %}
+  <strong>Retentativas:</strong> {{ execucao.retentativas or 0 }}
+  {% if execucao.failover %} · <strong>failover</strong>{% endif %}
+  {% if execucao.recuperado %} · <strong>recuperado após reinício</strong>{% endif %}
+</small></p>
+
 {% if execucao.erro %}<div class="aviso erro">{{ execucao.erro }}</div>{% endif %}
 
 <pre class="log" id="log-area">{{ log_inicial }}</pre>
@@ -23,5 +38,12 @@
 </form>
 <script src="/static/js/log-stream.js"></script>
 <script>iniciarStreamLog("{{ execucao.id }}", "log-area");</script>
+{% endif %}
+
+{% if execucao.status in ('dead_letter', 'adiado', 'erro', 'cancelado') %}
+<form method="post" action="/execucoes/{{ execucao.id }}/reexecutar" style="margin-top:0.75rem">
+  <button type="submit" class="secundario"
+          onclick="return confirm('Re-executar reaproveitando o checkpoint deste run?')">Re-executar</button>
+</form>
 {% endif %}
 {% endblock %}

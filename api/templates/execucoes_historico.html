@@ -24,7 +24,10 @@
     <tr>
       <td>{{ e.tipo_nome }}</td>
       <td><a href="/execucoes/{{ e.id }}">{{ e.tema }}</a></td>
-      <td><span class="badge {{ e.status }}">{{ e.status }}</span></td>
+      <td>
+        <span class="badge {{ e.status }}">{{ e.status }}</span>
+        {% if e.classe and e.status in ('dead_letter', 'adiado', 'erro') %}<small class="classe-erro">{{ e.classe }}</small>{% endif %}
+      </td>
       <td>{{ e.iniciado_em }}</td>
       <td>{{ e.finalizado_em or '—' }}</td>
       <td>{% if e.url_publicacao %}<a href="{{ e.url_publicacao }}" target="_blank" rel="noopener">ver</a>{% else %}—{% endif %}</td>
