@@ -65,7 +65,7 @@ def test_config_tab_hints_opcoes_batem_com_default():
 
 def test_config_tab_nao_expoe_blocos_de_pilar():
     # os blocos de pilar têm abas próprias e não devem aparecer na aba Config
-    for bloco in ("descoberta", "geracao", "publicacao", "feedback"):
+    for bloco in ("descoberta", "geracao", "publicacao", "feedback", "operacao"):
         assert bloco not in T.CONFIG_TAB_PADRAO
 
 
@@ -81,6 +81,7 @@ def test_config_tab_roundtrip_valida_no_schema(make_tipo):
     from descoberta.configuracao import mesclar_descoberta
     from feedback.configuracao import mesclar_feedback
     from geracao.configuracao import mesclar_geracao
+    from operacoes.configuracao import mesclar_operacao
     from publicacao.configuracao import mesclar_publicacao
 
     tipo = make_tipo()
@@ -94,6 +95,7 @@ def test_config_tab_roundtrip_valida_no_schema(make_tipo):
             "geracao": mesclar_geracao(atual.get("geracao")),
             "publicacao": mesclar_publicacao(atual.get("publicacao"), atual.get("youtube")),
             "feedback": mesclar_feedback(atual.get("feedback")),
+            "operacao": mesclar_operacao(atual.get("operacao")),
         }
         return TipoConfig(**full).model_dump()
 

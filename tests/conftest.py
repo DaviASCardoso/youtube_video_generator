@@ -17,6 +17,7 @@ from PIL import Image
 from descoberta.configuracao import DESCOBERTA_PADRAO
 from feedback.configuracao import FEEDBACK_PADRAO
 from geracao.configuracao import GERACAO_PADRAO
+from operacoes.configuracao import OPERACAO_PADRAO
 from publicacao.configuracao import PUBLICACAO_PADRAO
 
 
@@ -118,6 +119,7 @@ _CONFIG_TIPO_PADRAO = {
     "geracao": GERACAO_PADRAO,
     "publicacao": PUBLICACAO_PADRAO,
     "feedback": FEEDBACK_PADRAO,
+    "operacao": OPERACAO_PADRAO,
 }
 
 

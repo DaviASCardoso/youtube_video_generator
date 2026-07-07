@@ -9,6 +9,7 @@ from descoberta.configuracao import DESCOBERTA_PADRAO
 from descoberta.temas import FilaDeTemas
 from feedback.configuracao import FEEDBACK_PADRAO
 from geracao.configuracao import GERACAO_PADRAO
+from operacoes.configuracao import OPERACAO_PADRAO
 from publicacao.configuracao import PUBLICACAO_PADRAO
 
 _TIPOS_DIR = Path(__file__).parent.parent / "tipos"
@@ -41,6 +42,7 @@ DEFAULT_CONFIG = {
     "geracao": GERACAO_PADRAO,
     "publicacao": PUBLICACAO_PADRAO,
     "feedback": FEEDBACK_PADRAO,
+    "operacao": OPERACAO_PADRAO,
 }
 
 ASSETS_PADRAO = (

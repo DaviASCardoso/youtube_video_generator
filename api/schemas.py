@@ -14,6 +14,7 @@ from feedback.configuracao import (
     METRICAS_DISPONIVEIS,
     MODOS_APLICACAO,
 )
+from operacoes.configuracao import POLITICAS_PARCIAL
 from geracao.compositor import POSICOES
 from geracao.configuracao import (
     ACOES_ORCAMENTO,
@@ -596,6 +597,56 @@ class FeedbackConfig(BaseModel):
         return v
 
 
+class JobsOperacaoConfig(BaseModel):
+    descoberta: bool
+    geracao: bool
+    publicacao: bool
+    feedback: bool
+
+
+class CapsEstagioConfig(BaseModel):
+    roteiro: int = Field(ge=0, le=10)
+    plano_visual: int = Field(ge=0, le=10)
+    visuais: int = Field(ge=0, le=10)
+    narracao: int = Field(ge=0, le=10)
+    montagem: int = Field(ge=0, le=10)
+    publicacao: int = Field(ge=0, le=10)
+
+
+class BackoffConfig(BaseModel):
+    base_seg: float = Field(ge=0.0, le=60.0)
+    teto_seg: float = Field(ge=0.0, le=600.0)
+    jitter: float = Field(ge=0.0, le=1.0)
+
+
+class CircuitoConfig(BaseModel):
+    limiar_falhas: int = Field(ge=1, le=50)
+    cooldown_seg: int = Field(ge=1, le=86400)
+    janela_saude_seg: int = Field(ge=60, le=86400)
+
+
+class DeferHorasConfig(BaseModel):
+    quota: int = Field(ge=1, le=168)
+    orcamento: int = Field(ge=1, le=168)
+
+
+class OperacaoConfig(BaseModel):
+    jobs: JobsOperacaoConfig
+    caps_por_estagio: CapsEstagioConfig
+    backoff: BackoffConfig
+    circuito: CircuitoConfig
+    failover: bool
+    falha_parcial: str
+    defer_horas: DeferHorasConfig
+
+    @field_validator("falha_parcial")
+    @classmethod
+    def _validar_falha_parcial(cls, v):
+        if v not in POLITICAS_PARCIAL:
+            raise ValueError(f"falha_parcial deve ser uma de: {', '.join(POLITICAS_PARCIAL)}")
+        return v
+
+
 class TipoConfig(BaseModel):
     nome: str = Field(min_length=1)
     ativo: bool
@@ -610,6 +661,7 @@ class TipoConfig(BaseModel):
     geracao: GeracaoConfig
     publicacao: PublicacaoConfig
     feedback: FeedbackConfig
+    operacao: OperacaoConfig
 
 
 class CriarTipoForm(BaseModel):
