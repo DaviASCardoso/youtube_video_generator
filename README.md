@@ -21,7 +21,7 @@ O sistema é organizado em **sete pilares**, cada um com uma responsabilidade cl
 | **Publicação** | Levar o artefato até a plataforma: metadados, upload, visibilidade. | `publicacao/` |
 | **Controle** | Superfície humana **fina e schema-driven**: painel web (config, disparo, aprovação, dashboard, notificações), camadas de configuração, histórico e logs. | `api/` + `config/` |
 | **Feedback** | Fechar o ciclo com o desempenho real: ingerir analytics, atribuir aos inputs, agregar em findings e **aplicar** (ajuste numérico limitado no config **ou** guia de prompt traduzida por LLM), advisory por default. | `feedback/` |
-| **Operações** | Rodar sem supervisão: agendamento, orquestração, erros, segredos, custo. *(transversal)* | `operacoes/` |
+| **Operações** | Rodar sem supervisão: **agendar** os jobs de todo pilar e **orquestrar reativamente** o pipeline, respondendo a falhas por um **motor classificado** (transitório/permanente/auth/quota/recurso → backoff honrado+jitter, failover, circuit breaker, defer, dead-letter), recuperar runs após reboot, coletar saúde e emitir eventos. *(transversal)* | `operacoes/` |
 | **Conformidade** | Ficar dentro das regras da plataforma: divulgação de mídia sintética, autenticidade. | `conformidade/` *(placeholder)* |
 
 Cada pilar tem um `README.md` próprio detalhando seus módulos. **Controle** mantém dois lares existentes e já bem nomeados (`api/` para a app web, `config/` para as camadas de configuração). **Conformidade** ainda não tem código — é um lar reservado. Pastas de dados de runtime (`output/`, `execucoes/`, `tendencias/`, e por tipo `tipos/<id>/feedback/` e `tipos/<id>/guia/`) e o conteúdo por tipo (`tipos/`) não são código e ficam na raiz.
