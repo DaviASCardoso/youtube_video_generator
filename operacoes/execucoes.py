@@ -1,5 +1,5 @@
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from queue import SimpleQueue
 from uuid import uuid4
 import json
@@ -9,8 +9,8 @@ import threading
 from config.tipos import TipoVideo
 from config.sistema import sistema
 from geracao.custo import Ledger
-from geracao.pipeline import gerar_video, ExecucaoCancelada
-from operacoes import notificacoes
+from geracao.pipeline import gerar_video, ExecucaoCancelada, OrcamentoExcedido
+from operacoes import notificacoes, resiliencia
 
 _HISTORICO_PATH = Path(__file__).parent.parent / "execucoes" / "historico.json"
 
@@ -98,6 +98,12 @@ class HistoricoExecucoes:
                 "custos": [],
                 "provedores": {},
                 "erro": None,
+                # Observabilidade do motor de resiliência (Pilar 6).
+                "retentativas": 0,
+                "failover": False,
+                "classe": None,
+                "adiado_para": None,
+                "recuperado": False,
             }
             execucoes.insert(0, registro)
             self._salvar(execucoes)
@@ -205,6 +211,44 @@ class HistoricoExecucoes:
             finalizado_em=datetime.now(timezone.utc).isoformat(),
         )
 
+    def registrar_resiliencia(self, execucao_id: str, relatorio: dict) -> dict:
+        """Anota a observabilidade do motor no run: nº de retentativas, se houve
+        failover e as classes de erro vistas ao longo dos estágios."""
+        classes = relatorio.get("classes") or []
+        return self._atualizar(
+            execucao_id,
+            retentativas=int(relatorio.get("tentativas", 0)),
+            failover=bool(relatorio.get("failover", False)),
+            classe=classes[-1] if classes else None,
+        )
+
+    def marcar_adiado(self, execucao_id: str, classe: str, adiado_para: str, erro: str) -> dict:
+        """Defer-para-janela: o recurso (cota/orçamento) estourou; o run é reprogramado
+        para quando ele reseta. Registrado (nunca perdido) com a classe e o horário-alvo."""
+        return self._atualizar(
+            execucao_id,
+            status="adiado",
+            finalizado_em=datetime.now(timezone.utc).isoformat(),
+            classe=classe,
+            adiado_para=adiado_para,
+            erro=erro,
+        )
+
+    def marcar_dead_letter(self, execucao_id: str, classe: str, erro: str) -> dict:
+        """Dead-letter: as estratégias casadas se esgotaram. Terminal, escalado e
+        re-executável pelo painel — a razão classificada fica registrada."""
+        return self._atualizar(
+            execucao_id,
+            status="dead_letter",
+            finalizado_em=datetime.now(timezone.utc).isoformat(),
+            classe=classe,
+            erro=erro,
+        )
+
+    def marcar_recuperado(self, execucao_id: str) -> dict:
+        """Marca que este run foi retomado após um reinício (recuperação de crash)."""
+        return self._atualizar(execucao_id, recuperado=True)
+
     def listar(self, tipo_id: str | None = None) -> list[dict]:
         """Lista execuções, mais recentes primeiro.
 
@@ -260,6 +304,19 @@ def cancelamento_pedido(execucao_id: str) -> bool:
 def _limpar_cancelamento(execucao_id: str) -> None:
     with _cancel_lock:
         _cancelamentos.discard(execucao_id)
+
+
+# Reagendador de runs adiados (defer-para-janela). O scheduler injeta o seu na subida
+# (`definir_reagendador`); sem ele, um defer só marca 'adiado' (nada reagenda) —
+# assim a orquestração fica desacoplada do scheduler e testável sem um em execução.
+_reagendador = None
+
+
+def definir_reagendador(fn) -> None:
+    """Registra a função que reprograma um run adiado — `(tipo, tema, output_path,
+    quando: datetime) -> None`. Chamada pelo scheduler na subida."""
+    global _reagendador
+    _reagendador = fn
 
 
 def pasta_da_execucao(registro: dict) -> Path | None:
@@ -445,12 +502,15 @@ def executar_com_captura(
     tee = _TeeStdout(execucao["id"], log_path)
     _proxy.ativar(tee)
     ledger = Ledger()
+    rel: dict = {}  # observabilidade do motor: retentativas/failover/classes
     try:
         caminho = gerar_video(
             tema=tema, tipo=tipo, output_path=output_path, ledger=ledger,
             cancelado=lambda: cancelamento_pedido(execucao["id"]),
+            relatorio=rel,
         )
         historico.registrar_custos(execucao["id"], ledger)
+        historico.registrar_resiliencia(execucao["id"], rel)
         _publicar_se_configurado(execucao["id"], tipo, caminho, ledger=ledger)
         # A publicação pode ter marcado o run como "aguardando_publicacao" (gate de
         # revisão); só concluímos se ela não moveu o status.
@@ -459,9 +519,25 @@ def executar_com_captura(
         return caminho
     except ExecucaoCancelada:
         print("Execução cancelada pelo usuário.")
+        historico.registrar_resiliencia(execucao["id"], rel)
         historico.cancelar(execucao["id"])
         raise
+    except (resiliencia.Deferir, OrcamentoExcedido) as e:
+        historico.registrar_resiliencia(execucao["id"], rel)
+        _adiar_execucao(execucao, tipo, tema, output_path, e)
+        raise
+    except (resiliencia.ResilienciaEsgotada, resiliencia.HaltDestino) as e:
+        classe = getattr(e, "classe", "auth")
+        historico.registrar_resiliencia(execucao["id"], rel)
+        historico.marcar_dead_letter(execucao["id"], classe, str(e))
+        notificacoes.emitir(
+            "job_dead_letter",
+            f"Dead-letter — {tipo.nome}",
+            f"Tema: {tema}\nClasse: {classe}\n{e}",
+        )
+        raise
     except Exception as e:
+        historico.registrar_resiliencia(execucao["id"], rel)
         historico.falhar(execucao["id"], str(e))
         notificacoes.emitir(
             "run_falhou",
@@ -473,6 +549,30 @@ def executar_com_captura(
         _limpar_cancelamento(execucao["id"])
         _proxy.desativar()
         tee.close()
+
+
+def _adiar_execucao(execucao: dict, tipo: TipoVideo, tema: str, output_path: Path, erro: Exception) -> None:
+    """Marca o run como 'adiado' e o reprograma para a janela em que o recurso reseta.
+
+    `Deferir` traz a janela em horas; `OrcamentoExcedido` usa o `defer_horas.orcamento`
+    do tipo. Reusa a mesma pasta (o checkpoint retoma os estágios já prontos). Se não há
+    reagendador injetado (scheduler fora do ar), o run fica registrado como 'adiado'
+    mesmo assim — nunca é perdido em silêncio."""
+    politica = resiliencia.de_tipo(tipo)
+    if isinstance(erro, resiliencia.Deferir):
+        classe, horas = erro.classe, erro.quando_horas
+    else:  # OrcamentoExcedido
+        classe, horas = "orcamento", politica.defer_horas.get("orcamento", 24)
+    quando = datetime.now() + timedelta(hours=float(horas))
+    historico.marcar_adiado(execucao["id"], classe, quando.astimezone().isoformat(), str(erro))
+    print(f"Execução adiada ({classe}) para {quando.isoformat()} — recurso esgotado.")
+    notificacoes.emitir(
+        "cota_atingida",
+        f"Execução adiada — {tipo.nome}",
+        f"Tema: {tema}\nClasse: {classe}\nReprogramada para {quando.strftime('%d/%m %H:%M')}.",
+    )
+    if _reagendador is not None:
+        _reagendador(tipo, tema, Path(output_path), quando)
 
 
 def publicar_execucao(execucao_id: str) -> str:

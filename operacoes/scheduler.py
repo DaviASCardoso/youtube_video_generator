@@ -14,6 +14,7 @@ from descoberta.configuracao import mesclar_descoberta
 from descoberta.descoberta import decidir_tema
 from operacoes.execucoes import (
     ExecucaoEmAndamentoError,
+    definir_reagendador,
     executar_com_captura,
     historico,
     pasta_da_execucao,
@@ -143,6 +144,31 @@ def _job_reservado(tipo_id: str, tema: str, execucao: dict, output_path=None) ->
 
 def _job_publicar(execucao_id: str) -> None:
     publicar_execucao(execucao_id)
+
+
+def _job_adiado(tipo_id: str, tema: str, output_path) -> None:
+    """Retoma um run que foi adiado (cota/orçamento) quando a janela chega. Cria um
+    novo registro e reusa a pasta antiga — o checkpoint pula os estágios já prontos."""
+    tipo = carregar_tipo(tipo_id)
+    try:
+        execucao = historico.iniciar(tipo.id, tipo.nome, tema)
+    except ExecucaoEmAndamentoError:
+        print(f"[{tipo.nome}] Já há execução em andamento; run adiado não reenfileirado.")
+        return
+    executar_com_captura(tema, tipo, execucao=execucao, output_path=output_path)
+
+
+def reagendar_adiado(tipo: TipoVideo, tema: str, output_path, quando: datetime) -> None:
+    """Reprograma um run adiado para `quando` (a janela em que o recurso reseta),
+    reusando a mesma pasta. Injetado no `executar_com_captura` via `definir_reagendador`."""
+    scheduler.add_job(
+        _job_adiado,
+        trigger="date",
+        run_date=quando,
+        args=[tipo.id, tema, str(output_path)],
+        id=f"adiado-{tipo.id}-{int(quando.timestamp())}",
+        replace_existing=True,
+    )
 
 
 def _job_saude() -> None:
@@ -337,6 +363,7 @@ def atualizar_max_simultaneo(max_simultaneo: int) -> None:
 
 
 def iniciar() -> None:
+    definir_reagendador(reagendar_adiado)  # runs adiados voltam pela janela de reset
     for tipo in listar_tipos_ativos():
         registrar_job(tipo)
     scheduler.add_job(

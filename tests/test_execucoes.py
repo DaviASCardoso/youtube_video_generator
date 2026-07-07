@@ -130,7 +130,7 @@ def test_executar_com_captura_cancelado(make_tipo, monkeypatch, tmp_path, sistem
     hist = HistoricoExecucoes(tmp_path / "h.json")
     monkeypatch.setattr(execucoes, "historico", hist)
 
-    def _cancela(tema, tipo, output_path, ledger=None, cancelado=None):
+    def _cancela(tema, tipo, output_path, ledger=None, cancelado=None, relatorio=None):
         from pathlib import Path
 
         Path(output_path).mkdir(parents=True, exist_ok=True)
@@ -252,7 +252,7 @@ def test_executar_com_captura_gera_e_conclui_sem_destino(
     hist = HistoricoExecucoes(tmp_path / "h.json")
     monkeypatch.setattr(execucoes, "historico", hist)
 
-    def fake_gerar(tema, tipo, output_path, ledger=None, cancelado=None):
+    def fake_gerar(tema, tipo, output_path, ledger=None, cancelado=None, relatorio=None):
         from pathlib import Path
 
         base = Path(output_path)
@@ -310,6 +310,110 @@ def test_pasta_da_execucao_sem_nada():
     assert execucoes.pasta_da_execucao({"output_path": None, "log_path": None}) is None
 
 
+def test_marcar_adiado_dead_letter_e_recuperado(hist):
+    reg = hist.iniciar("canal", "Canal", "t")
+    hist.marcar_adiado(reg["id"], "quota", "2026-07-08T06:00:00", "cota estourou")
+    dep = hist.obter(reg["id"])
+    assert dep["status"] == "adiado"
+    assert dep["classe"] == "quota"
+    assert dep["adiado_para"] == "2026-07-08T06:00:00"
+    assert dep["erro"] == "cota estourou"
+
+    reg2 = hist.iniciar("canal", "Canal", "t2")
+    hist.marcar_dead_letter(reg2["id"], "permanente", "input inválido")
+    dl = hist.obter(reg2["id"])
+    assert dl["status"] == "dead_letter"
+    assert dl["classe"] == "permanente"
+
+    hist.marcar_recuperado(reg2["id"])
+    assert hist.obter(reg2["id"])["recuperado"] is True
+
+
+def test_registrar_resiliencia_grava_observabilidade(hist):
+    reg = hist.iniciar("canal", "Canal", "t")
+    hist.registrar_resiliencia(reg["id"], {"tentativas": 3, "failover": True, "classes": ["transitorio", "transitorio"]})
+    dep = hist.obter(reg["id"])
+    assert dep["retentativas"] == 3
+    assert dep["failover"] is True
+    assert dep["classe"] == "transitorio"
+
+
+def _tipo_e_hist(make_tipo, monkeypatch, tmp_path, sistema_temp):
+    sistema_temp._config["saida"]["pasta_base"] = str(tmp_path / "out")
+    tipo = make_tipo(config_extra=_youtube_cfg(publicar=False))
+    hist = HistoricoExecucoes(tmp_path / "h.json")
+    monkeypatch.setattr(execucoes, "historico", hist)
+    return tipo, hist
+
+
+def test_deferir_marca_adiado_e_reagenda(make_tipo, monkeypatch, tmp_path, sistema_temp):
+    from operacoes import resiliencia
+
+    tipo, hist = _tipo_e_hist(make_tipo, monkeypatch, tmp_path, sistema_temp)
+
+    def gera_defer(tema, tipo, output_path, ledger=None, cancelado=None, relatorio=None):
+        raise resiliencia.Deferir("quota", 24, {"estagio": "roteiro"})
+
+    monkeypatch.setattr(execucoes, "gerar_video", gera_defer)
+    chamado = {}
+    monkeypatch.setattr(
+        execucoes, "_reagendador",
+        lambda tp, tema, out, quando: chamado.update(tipo=tp.id, tema=tema, quando=quando),
+    )
+
+    with pytest.raises(resiliencia.Deferir):
+        execucoes.executar_com_captura("meu tema", tipo, output_path=tmp_path / "run")
+
+    reg = hist.listar(tipo.id)[0]
+    assert reg["status"] == "adiado"
+    assert reg["classe"] == "quota"
+    assert reg["adiado_para"] is not None
+    assert chamado["tipo"] == tipo.id  # reagendador foi chamado
+
+
+def test_orcamento_excedido_tambem_adia(make_tipo, monkeypatch, tmp_path, sistema_temp):
+    from geracao.pipeline import OrcamentoExcedido
+
+    tipo, hist = _tipo_e_hist(make_tipo, monkeypatch, tmp_path, sistema_temp)
+
+    def gera_estoura(tema, tipo, output_path, ledger=None, cancelado=None, relatorio=None):
+        raise OrcamentoExcedido("orçamento excedido")
+
+    monkeypatch.setattr(execucoes, "gerar_video", gera_estoura)
+    monkeypatch.setattr(execucoes, "_reagendador", None)  # sem scheduler: só registra
+
+    with pytest.raises(OrcamentoExcedido):
+        execucoes.executar_com_captura("t", tipo, output_path=tmp_path / "run")
+
+    reg = hist.listar(tipo.id)[0]
+    assert reg["status"] == "adiado"
+    assert reg["classe"] == "orcamento"
+
+
+def test_resiliencia_esgotada_vira_dead_letter(make_tipo, monkeypatch, tmp_path, sistema_temp):
+    from operacoes import resiliencia
+
+    tipo, hist = _tipo_e_hist(make_tipo, monkeypatch, tmp_path, sistema_temp)
+
+    def gera_esgota(tema, tipo, output_path, ledger=None, cancelado=None, relatorio=None):
+        raise resiliencia.ResilienciaEsgotada("permanente", {"estagio": "roteiro"})
+
+    monkeypatch.setattr(execucoes, "gerar_video", gera_esgota)
+    emitido = {}
+    monkeypatch.setattr(
+        execucoes.notificacoes, "emitir",
+        lambda cat, tit, msg, **k: emitido.update(cat=cat) or True,
+    )
+
+    with pytest.raises(resiliencia.ResilienciaEsgotada):
+        execucoes.executar_com_captura("t", tipo, output_path=tmp_path / "run")
+
+    reg = hist.listar(tipo.id)[0]
+    assert reg["status"] == "dead_letter"
+    assert reg["classe"] == "permanente"
+    assert emitido["cat"] == "job_dead_letter"
+
+
 def test_executar_reaproveita_pasta_dada(make_tipo, monkeypatch, tmp_path, sistema_temp):
     from pathlib import Path
 
@@ -319,7 +423,7 @@ def test_executar_reaproveita_pasta_dada(make_tipo, monkeypatch, tmp_path, siste
 
     recebido = {}
 
-    def fake_gerar(tema, tipo, output_path, ledger=None, cancelado=None):
+    def fake_gerar(tema, tipo, output_path, ledger=None, cancelado=None, relatorio=None):
         recebido["output_path"] = Path(output_path)
         Path(output_path).mkdir(parents=True, exist_ok=True)
         video = Path(output_path) / "video_final.mp4"

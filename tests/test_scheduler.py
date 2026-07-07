@@ -173,6 +173,33 @@ def test_reexecutar_agora_sem_pasta_erra(make_tipo, monkeypatch):
         sched.reexecutar_agora("v")
 
 
+# --- reagendar_adiado (defer-para-janela) ---
+
+def test_reagendar_adiado_agenda_na_janela(make_tipo, monkeypatch):
+    from datetime import datetime
+
+    tipo = make_tipo()
+    capturado = {}
+    monkeypatch.setattr(sched.scheduler, "add_job", lambda *a, **k: capturado.update(kwargs=k))
+    quando = datetime(2026, 7, 8, 6, 0, 0)
+
+    sched.reagendar_adiado(tipo, "meu tema", "output/x/2026", quando)
+
+    assert capturado["kwargs"]["run_date"] == quando
+    assert capturado["kwargs"]["args"] == [tipo.id, "meu tema", "output/x/2026"]
+
+
+def test_iniciar_injeta_reagendador(monkeypatch):
+    monkeypatch.setattr(sched, "listar_tipos_ativos", lambda: [])
+    monkeypatch.setattr(sched.scheduler, "add_job", lambda *a, **k: None)
+    monkeypatch.setattr(sched.scheduler, "start", lambda: None)
+    registrado = {}
+    monkeypatch.setattr(sched, "definir_reagendador", lambda fn: registrado.update(fn=fn))
+
+    sched.iniciar()
+    assert registrado["fn"] is sched.reagendar_adiado
+
+
 # --- publicar_agora ---
 
 def test_publicar_agora_agenda_job(monkeypatch):
