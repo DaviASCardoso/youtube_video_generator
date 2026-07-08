@@ -50,6 +50,12 @@ class SistemaSaida(BaseModel):
     pasta_base: str = Field(min_length=1)
 
 
+class SistemaCaminhos(BaseModel):
+    execucoes: str = Field(min_length=1)
+    tendencias: str = Field(min_length=1)
+    tipos: str = Field(min_length=1)
+
+
 class SistemaVideo(BaseModel):
     fps: int = Field(ge=1, le=120)
     codec: str = Field(min_length=1)
@@ -59,6 +65,7 @@ class SistemaVideo(BaseModel):
 class SistemaConfig(BaseModel):
     execucao: SistemaExecucao
     saida: SistemaSaida
+    caminhos: SistemaCaminhos
     video: SistemaVideo
 
 
