@@ -9,7 +9,7 @@ from api.templating import templates
 from operacoes import saude
 from operacoes import scheduler as scheduler_mod
 from config.tipos import carregar_tipo, listar_tipos
-from config.sistema import sistema
+from config import caminhos
 from operacoes.execucoes import historico, transmissor, ExecucaoEmAndamentoError
 
 router = APIRouter(prefix="/execucoes", tags=["execucoes"])
@@ -93,7 +93,7 @@ def _url_video(execucao: dict) -> str | None:
     if execucao["status"] != "concluido" or not execucao.get("output_path"):
         return None
 
-    pasta_base = Path(sistema.get("saida.pasta_base")).resolve()
+    pasta_base = caminhos.raiz("saida").resolve()
     caminho_video = Path(execucao["output_path"]).resolve()
     try:
         relativo = caminho_video.relative_to(pasta_base)

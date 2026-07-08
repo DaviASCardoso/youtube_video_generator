@@ -40,7 +40,7 @@ def _bruto(nome: str) -> str:
     chave, padrao = _RAIZES[nome]
     try:
         valor = sistema.get(chave)
-    except KeyError:
+    except (KeyError, FileNotFoundError):
         valor = padrao
     valor = str(valor).strip() if valor is not None else ""
     return valor or padrao

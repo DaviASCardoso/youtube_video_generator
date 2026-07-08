@@ -20,8 +20,10 @@ import threading
 import time
 from pathlib import Path
 
+from config import caminhos
+
 BASE = Path(__file__).parent
-_CIRCUITOS_PATH = BASE.parent / "execucoes" / "circuitos.json"
+_CIRCUITOS_PATH = caminhos.raiz("execucoes") / "circuitos.json"
 
 FECHADO = "fechado"
 ABERTO = "aberto"

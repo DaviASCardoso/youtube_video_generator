@@ -140,14 +140,29 @@ _CONFIG_TIPO_PADRAO = {
 }
 
 
+def _caminhos_temp(tmp_path):
+    """Bloco `caminhos` apontando as raízes de armazenamento para tmp_path.
+
+    Ambos `tipos_dir` e `sistema_temp` usam o mesmo tmp_path por teste, então a raiz
+    de tipos coincide qualquer que seja a ordem de setup dos fixtures."""
+    return {
+        "execucoes": str(tmp_path / "execucoes"),
+        "tendencias": str(tmp_path / "tendencias"),
+        "tipos": str(tmp_path / "tipos"),
+    }
+
+
 @pytest.fixture
 def tipos_dir(tmp_path, monkeypatch):
-    """Redireciona config.tipos._TIPOS_DIR para uma pasta temporária."""
-    import config.tipos as tipos_mod
+    """Aponta a raiz de tipos — pela config de caminhos do sistema, não por um atalho
+    de constante — para uma pasta temporária, exercitando a indireção real."""
+    from config.sistema import sistema
 
     destino = tmp_path / "tipos"
     destino.mkdir()
-    monkeypatch.setattr(tipos_mod, "_TIPOS_DIR", destino)
+    atual = json.loads(json.dumps(sistema.get_all()))
+    atual.setdefault("caminhos", {})["tipos"] = str(destino)
+    monkeypatch.setattr(sistema, "_config", atual)
     return destino
 
 
@@ -180,14 +195,18 @@ def make_tipo(tipos_dir):
 
 
 @pytest.fixture
-def sistema_temp(monkeypatch):
-    """Injeta valores conhecidos no singleton config.sistema.sistema, restaurando depois."""
+def sistema_temp(tmp_path, monkeypatch):
+    """Injeta valores conhecidos no singleton config.sistema.sistema, restaurando depois.
+
+    O bloco `caminhos` aponta para tmp_path (mesmo tmp do `tipos_dir`), então a
+    resolução via config.caminhos fica isolada do disco real."""
     from config.sistema import sistema
 
     original = sistema._config
     valores = {
         "execucao": {"max_simultaneo": 1},
         "saida": {"pasta_base": "output"},
+        "caminhos": _caminhos_temp(tmp_path),
         "video": {"fps": 24, "codec": "libx264", "audio_codec": "aac"},
     }
     sistema._config = json.loads(json.dumps(valores))

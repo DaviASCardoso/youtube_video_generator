@@ -7,12 +7,12 @@ import sys
 import threading
 
 from config.tipos import TipoVideo
-from config.sistema import sistema
+from config import caminhos
 from geracao.custo import Ledger
 from geracao.pipeline import gerar_video, ExecucaoCancelada, OrcamentoExcedido
 from operacoes import notificacoes, resiliencia
 
-_HISTORICO_PATH = Path(__file__).parent.parent / "execucoes" / "historico.json"
+_HISTORICO_PATH = caminhos.raiz("execucoes") / "historico.json"
 
 
 class ExecucaoEmAndamentoError(RuntimeError):
@@ -512,7 +512,7 @@ def executar_com_captura(
         # Run novo: pasta com timestamp. Reexecutar passa a pasta antiga, e aí o
         # checkpoint do pipeline reaproveita os artefatos que já existem e validam.
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = Path(sistema.get("saida.pasta_base")) / tipo.id / timestamp
+        output_path = caminhos.raiz("saida") / tipo.id / timestamp
     output_path = Path(output_path)
     log_path = output_path / "execucao.log"
     historico.definir_log_path(execucao["id"], log_path)

@@ -14,8 +14,10 @@ import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from config import caminhos
+
 BASE = Path(__file__).parent
-_HISTORICO_PATH = BASE.parent / "tendencias" / "historico.json"
+_HISTORICO_PATH = caminhos.raiz("tendencias") / "historico.json"
 
 
 def _normalizar(nome: str) -> str:

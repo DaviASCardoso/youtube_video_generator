@@ -12,7 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from operacoes import scheduler as scheduler_mod
 from api.auth import RequerLoginMiddleware, auth_ativo
 from api.routers import aprovacoes, assets, auth, conformidade, configuracoes, descoberta, execucoes, feedback, geracao, operacao, publicacao, temas, tipos
-from config.sistema import sistema
+from config import caminhos
 
 BASE = Path(__file__).parent
 
@@ -67,7 +67,7 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
-_pasta_saida = Path(sistema.get("saida.pasta_base"))
+_pasta_saida = caminhos.raiz("saida")
 _pasta_saida.mkdir(parents=True, exist_ok=True)
 app.mount("/saida", StaticFiles(directory=_pasta_saida), name="saida")
 

@@ -4,6 +4,7 @@ import re
 import shutil
 import unicodedata
 
+from config import caminhos
 from config.settings import Config
 from conformidade.configuracao import CONFORMIDADE_PADRAO
 from descoberta.configuracao import DESCOBERTA_PADRAO
@@ -13,7 +14,10 @@ from geracao.configuracao import GERACAO_PADRAO
 from operacoes.configuracao import OPERACAO_PADRAO
 from publicacao.configuracao import PUBLICACAO_PADRAO
 
-_TIPOS_DIR = Path(__file__).parent.parent / "tipos"
+def _raiz_tipos() -> Path:
+    """Raiz do conteúdo por tipo, resolvida a cada chamada pela config de caminhos
+    (trocar o ajuste no painel realoca os tipos sem editar código)."""
+    return caminhos.raiz("tipos")
 
 DEFAULT_CONFIG = {
     "groq": {"modelo": "llama-3.3-70b-versatile", "temperatura": 0.8, "max_tokens": 4096},
@@ -78,11 +82,11 @@ def _slugify(texto: str) -> str:
 
 
 def _id_disponivel(id_base: str) -> str:
-    if not (_TIPOS_DIR / id_base).exists():
+    if not (_raiz_tipos() / id_base).exists():
         return id_base
 
     contador = 2
-    while (_TIPOS_DIR / f"{id_base}_{contador}").exists():
+    while (_raiz_tipos() / f"{id_base}_{contador}").exists():
         contador += 1
     return f"{id_base}_{contador}"
 
@@ -99,7 +103,7 @@ def carregar_tipo(id: str) -> TipoVideo:
     Raises:
         FileNotFoundError: Se tipos/<id>/config.json não existir.
     """
-    caminho = _TIPOS_DIR / id
+    caminho = _raiz_tipos() / id
     config = Config(caminho / "config.json")
 
     return TipoVideo(
@@ -119,11 +123,11 @@ def listar_tipos() -> list[TipoVideo]:
     Returns:
         Lista de tipos de vídeo, na ordem em que as pastas aparecem no disco.
     """
-    if not _TIPOS_DIR.exists():
+    if not _raiz_tipos().exists():
         return []
 
     ids = sorted(
-        p.parent.name for p in _TIPOS_DIR.glob("*/config.json")
+        p.parent.name for p in _raiz_tipos().glob("*/config.json")
     )
     return [carregar_tipo(id) for id in ids]
 
@@ -146,7 +150,7 @@ def criar_tipo(nome: str, config_inicial: dict | None = None) -> TipoVideo:
         O tipo de vídeo criado.
     """
     id = _id_disponivel(_slugify(nome))
-    pasta = _TIPOS_DIR / id
+    pasta = _raiz_tipos() / id
     pasta_assets = pasta / "assets"
     pasta_assets.mkdir(parents=True)
 
@@ -180,7 +184,7 @@ def duplicar_tipo(id_origem: str, novo_nome: str) -> TipoVideo:
     """
     origem = carregar_tipo(id_origem)
     novo_id = _id_disponivel(_slugify(novo_nome))
-    nova_pasta = _TIPOS_DIR / novo_id
+    nova_pasta = _raiz_tipos() / novo_id
 
     shutil.copytree(origem.assets_dir, nova_pasta / "assets")
 
@@ -207,21 +211,21 @@ def renomear_tipo(id_antigo: str, novo_nome: str) -> TipoVideo:
         FileNotFoundError: Se o tipo antigo não existir.
         FileExistsError: Se o novo id já estiver em uso por outro tipo.
     """
-    pasta_antiga = _TIPOS_DIR / id_antigo
+    pasta_antiga = _raiz_tipos() / id_antigo
     if not pasta_antiga.is_dir():
         raise FileNotFoundError(f"Tipo de vídeo '{id_antigo}' não encontrado.")
 
     novo_id = _slugify(novo_nome)
 
     if novo_id != id_antigo:
-        pasta_nova = _TIPOS_DIR / novo_id
+        pasta_nova = _raiz_tipos() / novo_id
         if pasta_nova.exists():
             raise FileExistsError(f"Já existe um tipo de vídeo com id '{novo_id}'.")
         pasta_antiga.rename(pasta_nova)
     else:
         novo_id = id_antigo
 
-    config = Config((_TIPOS_DIR / novo_id) / "config.json")
+    config = Config((_raiz_tipos() / novo_id) / "config.json")
     dados = config.get_all()
     dados["nome"] = novo_nome
     config.salvar(dados)
@@ -238,7 +242,7 @@ def excluir_tipo(id: str) -> None:
     Raises:
         FileNotFoundError: Se o tipo não existir.
     """
-    pasta = _TIPOS_DIR / id
+    pasta = _raiz_tipos() / id
     if not pasta.is_dir():
         raise FileNotFoundError(f"Tipo de vídeo '{id}' não encontrado.")
     shutil.rmtree(pasta)

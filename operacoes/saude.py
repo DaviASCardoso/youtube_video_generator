@@ -12,7 +12,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from config.sistema import sistema
+from config import caminhos
 
 # Limiares default (só para marcar "atenção"; não forçam nada).
 DISCO_BAIXO_PCT = 10.0
@@ -20,7 +20,7 @@ DISCO_BAIXO_PCT = 10.0
 # Batida do scheduler: o job de saúde a grava; o dashboard a lê para detectar um
 # scheduler travado (running=True, mas sem disparar jobs). Estagnado após ~13h — pouco
 # mais de duas passadas do job de saúde (6h), então uma batida perdida não alarma.
-_HEARTBEAT_PATH = Path(__file__).parent.parent / "execucoes" / "heartbeat.json"
+_HEARTBEAT_PATH = caminhos.raiz("execucoes") / "heartbeat.json"
 HEARTBEAT_LIMITE_SEG = 13 * 3600
 
 
@@ -69,10 +69,7 @@ def _pasta_existente(caminho: Path) -> Path:
 def disco(pasta: str | None = None, limite_pct: float = DISCO_BAIXO_PCT) -> dict:
     """Uso de disco da pasta de saída. Marca `baixo` quando o livre cai do limite."""
     if pasta is None:
-        try:
-            pasta = sistema.get("saida.pasta_base")
-        except KeyError:
-            pasta = "."
+        pasta = str(caminhos.raiz("saida"))
     alvo = _pasta_existente(Path(pasta))
     uso = shutil.disk_usage(alvo)
     livre_pct = (uso.free / uso.total * 100) if uso.total else 0.0
