@@ -193,5 +193,37 @@ def test_verificar_e_alertar_silencioso_quando_ok(monkeypatch):
     )
     monkeypatch.setattr(saude, "disco", lambda: {"baixo": False, "caminho": "/x", "livre_gb": 50.0, "livre_pct": 80.0})
     monkeypatch.setattr(saude, "credenciais", lambda tipos=None: [{"status": "valido", "tipo_nome": "T", "destino": "youtube", "detalhe": ""}])
+    monkeypatch.setattr(saude, "caminhos_saude", lambda: [{"nome": "saida", "caminho": "/x", "existe": True, "gravavel": True, "ok": True}])
     assert saude.verificar_e_alertar() == []
     assert emitidas == []
+
+
+def test_caminhos_saude_reporta_raizes(sistema_temp):
+    estados = saude.caminhos_saude()
+    nomes = {e["nome"] for e in estados}
+    assert nomes == {"saida", "execucoes", "tendencias", "tipos"}
+    assert all(e["ok"] for e in estados)  # sistema_temp aponta para tmp gravável
+
+
+def test_verificar_e_alertar_caminho_indisponivel(monkeypatch):
+    emitidas = []
+    monkeypatch.setattr(
+        notificacoes, "emitir",
+        lambda cat, titulo, msg, prioridade=None: emitidas.append(cat) or True,
+    )
+    monkeypatch.setattr(saude, "disco", lambda: {"baixo": False, "caminho": "/x", "livre_gb": 50.0, "livre_pct": 80.0})
+    monkeypatch.setattr(saude, "credenciais", lambda tipos=None: [])
+    monkeypatch.setattr(
+        saude, "caminhos_saude",
+        lambda: [{"nome": "tipos", "caminho": "/nas/tipos", "existe": False, "gravavel": False, "ok": False}],
+    )
+    cats = saude.verificar_e_alertar()
+    assert "caminho_indisponivel" in cats
+
+
+def test_coletar_inclui_caminhos(sistema_temp, monkeypatch):
+    monkeypatch.setattr(saude, "credenciais", lambda tipos=None: [])
+    monkeypatch.setattr(saude, "gasto_hoje", lambda: 0.0)
+    dados = saude.coletar(tipos=[])
+    assert "caminhos" in dados
+    assert {e["nome"] for e in dados["caminhos"]} == {"saida", "execucoes", "tendencias", "tipos"}

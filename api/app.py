@@ -34,6 +34,14 @@ def _ips_locais() -> list[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Cria a árvore de cada raiz de armazenamento (saída, execuções, tendências,
+    # tipos). Um mount (NAS) ausente/somente-leitura não derruba o painel — ele
+    # precisa subir para o ajuste poder ser corrigido em /configuracoes —, mas
+    # avisa de forma acionável (e o dashboard mostra o sinal).
+    problemas = caminhos.garantir_raizes()
+    if problemas:
+        print("\n" + caminhos.mensagem_problemas(problemas) + "\n")
+
     scheduler_mod.iniciar()
 
     porta = os.environ.get("PORT", "8000")

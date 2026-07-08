@@ -83,6 +83,14 @@ def disco(pasta: str | None = None, limite_pct: float = DISCO_BAIXO_PCT) -> dict
     }
 
 
+def caminhos_saude() -> list[dict]:
+    """Estado de cada raiz de armazenamento configurada (existe? gravável?).
+
+    Uma raiz que aponta para um mount (NAS) ausente ou somente-leitura aparece como
+    `ok: False` — o dashboard mostra o sinal antes de um run falhar gravando nela."""
+    return caminhos.verificar_raizes()
+
+
 def _tipos(tipos=None):
     if tipos is not None:
         return tipos
@@ -173,6 +181,7 @@ def coletar(tipos=None) -> dict:
         "scheduler_rodando": scheduler_rodando(),
         "heartbeat": heartbeat(),
         "disco": disco(),
+        "caminhos": caminhos_saude(),
         "credenciais": credenciais(tipos),
         "gasto_hoje": gasto_hoje(),
         "orcamentos": [
@@ -201,6 +210,15 @@ def verificar_e_alertar(tipos=None) -> list[str]:
             f"{d['caminho']}: {d['livre_gb']} GB livres ({d['livre_pct']}%).",
         )
         emitidas.append("disco_baixo")
+
+    for c in caminhos_saude():
+        if not c["ok"]:
+            notificacoes.emitir(
+                "disco_baixo",
+                f"Caminho de armazenamento indisponível — {c['nome']}",
+                f"{c['caminho']}: ausente ou não gravável (verifique o mount/permissões).",
+            )
+            emitidas.append("caminho_indisponivel")
 
     for c in credenciais(tipos):
         if c["status"] in ("expirando", "expirado", "ausente", "erro"):
