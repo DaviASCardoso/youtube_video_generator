@@ -15,6 +15,7 @@ chamam exatamente as funções de sempre, na mesma ordem — a saída fica equiv
 de hoje (a variação atua só no texto do prompt).
 """
 
+import io
 import re
 import time
 from pathlib import Path
@@ -26,8 +27,13 @@ from config.sistema import sistema
 from config.tipos import TipoVideo
 from geracao import gates, legendas, sidecar
 from geracao.checkpoint import deve_reaproveitar
-from geracao.compositor import _fundo_placeholder, validar_personagens
-from geracao.configuracao import mesclar_geracao
+from geracao.compositor import (
+    EMOCAO_PADRAO,
+    _fundo_placeholder,
+    sobrepor_personagem,
+    validar_personagens,
+)
+from geracao.configuracao import mesclar_geracao, resolver_fundo, resolver_personagem
 from geracao.custo import (
     CUSTO_FLUX_IMAGEM,
     CUSTO_PEXELS,
@@ -213,6 +219,21 @@ def _salvar_imagem(caminho: Path, imagem) -> None:
         imagem.save(caminho)
 
 
+def _para_pil(imagem) -> Image.Image:
+    """Normaliza a saída do provedor (bytes do FLUX ou PIL do fundo) em PIL, para a
+    camada de personagem poder compor sobre qualquer fonte de fundo."""
+    if isinstance(imagem, (bytes, bytearray)):
+        return Image.open(io.BytesIO(imagem)).convert("RGB")
+    return imagem
+
+
+def _aplicar_personagem(imagem, dado, tipo) -> Image.Image:
+    """Sobrepõe a camada de personagem sobre o fundo já renderizado. A emoção vem do
+    plano da cena quando existe (fundo Pexels); com fundo por IA, cai em neutro."""
+    emocao = dado.get("emocao", EMOCAO_PADRAO) if isinstance(dado, dict) else EMOCAO_PADRAO
+    return sobrepor_personagem(_para_pil(imagem), emocao, tipo.config, tipo.assets_dir)
+
+
 def _render_resiliente(prov, indice, dado, tipo, cfg_ger, nome_visual, previsto, politica, rel, var, led, degradar):
     def _placeholder_failover(_politica=None):
         led.registrar("visuais", "placeholder", 0.0)
@@ -251,7 +272,7 @@ def _render_resiliente(prov, indice, dado, tipo, cfg_ger, nome_visual, previsto,
         return _placeholder_failover()
 
 
-def _estagio_visuais(frases, prov, dados, tipo, pasta_imagens, cfg_ger, politica, rel, nome_visual, var, led, reaproveitar):
+def _estagio_visuais(frases, prov, dados, tipo, pasta_imagens, cfg_ger, politica, rel, nome_visual, personagem_ativo, var, led, reaproveitar):
     previsto = _CUSTO_PREVISTO_VISUAL.get(nome_visual, 0.0)
     print("\nGerando visuais...")
     for (indice, _), dado in zip(frases, dados):
@@ -270,6 +291,9 @@ def _estagio_visuais(frases, prov, dados, tipo, pasta_imagens, cfg_ger, politica
             prov, indice, dado, tipo, cfg_ger, nome_visual, previsto, politica, rel, var, led,
             degradar=(decisao == "degradar"),
         )
+        # Camada de personagem: independente da fonte do fundo (foto ou IA).
+        if personagem_ativo:
+            imagem = _aplicar_personagem(imagem, dado, tipo)
         _salvar_imagem(caminho, imagem)
         print(f"  cena {indice}/{len(frases)} pronta")
 
@@ -392,11 +416,16 @@ def gerar_video(
     var = Variacao(cfg_ger["variacao"])
     reaproveitar = cfg_ger["checkpoint"]["reaproveitar"]
 
+    # Três camadas independentes. "auto" migra dos dois modos empacotados (legado
+    # imagens.modo); qualquer combinação fundo × personagem é possível.
     modo = _modo_imagens(tipo)
+    fundo = resolver_fundo(cfg_ger["visuais"], modo)
+    personagem_ativo = resolver_personagem(cfg_ger["visuais"], modo)
+
     nome_visual = cfg_ger["visuais"]["provedor"]
     if nome_visual == "auto":
-        nome_visual = provedores.provedor_visuais_para_modo(modo)
-    if nome_visual == "pexels":
+        nome_visual = provedores.provedor_visuais_para_fundo(fundo)
+    if personagem_ativo:
         validar_personagens(tipo.assets_dir)  # fail-fast antes de gastar
 
     # Estágios explícitos, cada um checkpointado + com gate de saída. Entre eles,
@@ -409,14 +438,16 @@ def gerar_video(
     )
     _checar_cancelamento(cancelado)
     _estagio_visuais(
-        frases, prov_visual, dados, tipo, pasta_imagens, cfg_ger, politica, rel, nome_visual, var, led, reaproveitar
+        frases, prov_visual, dados, tipo, pasta_imagens, cfg_ger, politica, rel, nome_visual, personagem_ativo, var, led, reaproveitar
     )
     _checar_cancelamento(cancelado)
     _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, politica, rel, led, reaproveitar)
     _checar_cancelamento(cancelado)
     caminho_video, duracao = _estagio_montagem(frases, base, pasta_audio, pasta_imagens, cfg_ger)
 
-    modo_visual = "personagem" if nome_visual == "pexels" else "ia"
+    # A dimensão modo_visual do Feedback agora é a fonte do fundo (camada de background):
+    # a seleção do provedor e o aprendizado giram esse knob real, não o modo aposentado.
+    modo_visual = "pexels" if nome_visual == "pexels" else "ia"
     sidecar.escrever(base, sidecar.montar(tema, frases, duracao, led, modo_visual=modo_visual))
     gasto_diario.registrar(led.total())
 

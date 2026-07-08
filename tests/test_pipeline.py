@@ -64,6 +64,21 @@ class _FakeVisuaisFlux:
         return b"IMGBYTES"
 
 
+class _FakeVisuaisFluxPNG(_FakeVisuaisFlux):
+    """Como o FLUX falso, mas devolve bytes de PNG de verdade — para os testes em que
+    a camada de personagem compõe sobre o fundo por IA (precisa abrir os bytes)."""
+
+    def renderizar(self, indice, dado, config, assets_dir, variacao=None, ledger=None):
+        import io as _io
+
+        type(self).chamou_render = True
+        if ledger is not None:
+            ledger.registrar("visuais", "flux", 0.02)
+        buf = _io.BytesIO()
+        Image.new("RGB", (16, 16), (30, 60, 90)).save(buf, format="PNG")
+        return buf.getvalue()
+
+
 class _FakeVisuaisPexels:
     def planejar(self, frases, config, assets_dir, variacao=None, ledger=None):
         return [{"emocao": "neutro", "busca": "x", "i_fundo": 0} for _ in frases]
@@ -186,6 +201,43 @@ def test_gerar_video_ramo_ia(tmp_path, sistema_temp, make_tipo, ambiente, monkey
 
     assert (pipeline.provedores.PAPEL_VISUAIS, "flux") in pedidos
     assert (tmp_path / "out" / "prompts.txt").exists()
+
+
+def test_camada_ia_com_personagem(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    # Combo novo, impossível nos modos empacotados: fundo por IA + personagem ligado.
+    # Mantém o bloco imagens do make_tipo (tem personagem.*); as camadas mandam:
+    # fundo "ia" seleciona FLUX, personagem "sim" mantém a camada de personagem.
+    ger = _tipo_geracao(visuais={"fundo": "ia", "personagem": "sim"})
+    tipo = make_tipo(config_extra={"geracao": ger})
+    pedidos = _instalar_provedores(monkeypatch, visuais=_FakeVisuaisFluxPNG())
+
+    orig = pipeline.sobrepor_personagem
+    compostas = []
+    monkeypatch.setattr(
+        pipeline, "sobrepor_personagem",
+        lambda cena, emo, cfg, ad: compostas.append(emo) or orig(cena, emo, cfg, ad),
+    )
+
+    gerar_video("tema", tipo, tmp_path / "out")
+
+    assert (pipeline.provedores.PAPEL_VISUAIS, "flux") in pedidos  # fundo por IA
+    assert compostas == ["neutro", "neutro"]  # personagem composto sobre cada cena
+
+
+def test_camada_pexels_sem_personagem(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    # Combo novo: foto do Pexels de fundo, sem personagem.
+    ger = _tipo_geracao(visuais={"fundo": "pexels", "personagem": "nao"})
+    tipo = make_tipo(config_extra={"geracao": ger})  # make_tipo é modo personagem, mas as camadas mandam
+    pedidos = _instalar_provedores(monkeypatch, visuais=_FakeVisuaisPexels())
+
+    compostas = []
+    monkeypatch.setattr(pipeline, "sobrepor_personagem", lambda *a: compostas.append(1))
+
+    gerar_video("tema", tipo, tmp_path / "out")
+
+    assert (pipeline.provedores.PAPEL_VISUAIS, "pexels") in pedidos  # fundo Pexels
+    assert compostas == []  # camada de personagem desligada
+    assert (tmp_path / "out" / "cenas.txt").exists()
 
 
 def test_cancelamento_aborta_antes_de_gastar(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
