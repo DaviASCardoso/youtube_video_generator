@@ -13,6 +13,9 @@
 {% if execucao.status == 'dead_letter' %}
 <div class="aviso erro">Dead-letter ({{ execucao.classe }}) — a resiliência se esgotou. Corrija a causa e re-execute (retoma do checkpoint).</div>
 {% endif %}
+{% if execucao.status == 'bloqueado_conformidade' %}
+<div class="aviso erro">Publicação bloqueada pela <strong>Conformidade</strong> (checagem objetiva). Corrija a causa (ative o disclosure ou o licenciamento do ativo nas regras/config) e reaprove.</div>
+{% endif %}
 
 <p class="observabilidade"><small>
   {% if execucao.classe %}<strong>Classe:</strong> {{ execucao.classe }} · {% endif %}
@@ -45,5 +48,27 @@
   <button type="submit" class="secundario"
           onclick="return confirm('Re-executar reaproveitando o checkpoint deste run?')">Re-executar</button>
 </form>
+{% endif %}
+
+{% if auditoria_conformidade %}
+<h2 style="margin-top:1.5rem">Conformidade</h2>
+{% for reg in auditoria_conformidade %}
+<div class="aviso" style="border-left:4px solid #888">
+  <p style="margin:0 0 0.3rem">
+    <strong>{{ reg.etapa }}</strong>
+    <span class="badge {{ reg.resultado }}">{{ reg.resultado }}</span>
+    <small>· {{ reg.quando[:16] if reg.quando else '' }}{% if reg.regras_versao is defined %} · regras v{{ reg.regras_versao }}{% endif %}</small>
+  </p>
+  {% if reg.disclosure %}
+  <p style="margin:0.2rem 0"><small><strong>Disclosure:</strong>
+    {{ 'exigido' if reg.disclosure.requer else 'não exigido' }}{% if reg.disclosure.base %} — {{ reg.disclosure.base }}{% endif %}</small></p>
+  {% endif %}
+  <ul style="margin:0.2rem 0">
+    {% for c in reg.checagens %}
+    <li><small><code>{{ c.nome }}</code> <span class="badge {{ c.resultado }}">{{ c.resultado }}</span>{% if c.detalhe %} — {{ c.detalhe }}{% endif %}</small></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
 {% endif %}
 {% endblock %}

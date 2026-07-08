@@ -102,6 +102,18 @@ def _url_video(execucao: dict) -> str | None:
     return f"/saida/{relativo.as_posix()}"
 
 
+def _auditoria_conformidade(execucao: dict) -> list[dict]:
+    """Registros da trilha de auditoria da Conformidade ligados a este run (mais
+    recentes primeiro). Vazio quando o pilar nunca rodou para o tipo."""
+    from conformidade.auditoria import auditoria_de
+
+    try:
+        tipo = carregar_tipo(execucao["tipo_id"])
+    except Exception:  # noqa: BLE001 (tipo renomeado/excluído)
+        return []
+    return auditoria_de(tipo).de_execucao(execucao["id"])
+
+
 @router.get("/historico", response_class=HTMLResponse)
 def pagina_historico(request: Request, tipo_id: str | None = None):
     # rota estática registrada antes de "/{execucao_id}" para não ser capturada por ela.
@@ -134,6 +146,7 @@ def pagina_detalhe(execucao_id: str, request: Request):
             "execucao": execucao,
             "log_inicial": log_inicial,
             "url_video": _url_video(execucao),
+            "auditoria_conformidade": _auditoria_conformidade(execucao),
         },
     )
 

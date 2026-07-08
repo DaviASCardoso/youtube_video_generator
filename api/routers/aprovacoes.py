@@ -10,6 +10,8 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 
 from api.templating import templates
+from conformidade.auditoria import auditoria_de
+from conformidade.parecer import FLAG
 from config.tipos import carregar_tipo, listar_tipos
 from descoberta import estado
 from operacoes import scheduler as scheduler_mod
@@ -18,13 +20,50 @@ from operacoes.execucoes import historico
 router = APIRouter(prefix="/aprovacoes", tags=["aprovacoes"])
 
 
+def _flags_do_registro(registro: dict) -> list[str]:
+    """Extrai os avisos (checagens sinalizadas) de um registro de auditoria."""
+    flags = []
+    for c in registro.get("checagens", []):
+        if c.get("resultado") == FLAG:
+            nome = c.get("nome", "conformidade")
+            detalhe = c.get("detalhe") or ""
+            flags.append(f"{nome}: {detalhe}" if detalhe else nome)
+    return flags
+
+
+def _flags_tema(tipo, tema: str) -> list[str]:
+    """Avisos de conformidade do veto de tema mais recente (limítrofe → pendente)."""
+    for reg in auditoria_de(tipo).listar():
+        if reg.get("etapa") == "descoberta" and reg.get("tema") == tema:
+            return _flags_do_registro(reg)
+    return []
+
+
+def _flags_publicacao(tipo_id: str, execucao_id: str) -> list[str]:
+    """Avisos de conformidade da avaliação de publicação de um run."""
+    try:
+        tipo = carregar_tipo(tipo_id)
+    except Exception:  # noqa: BLE001 (tipo pode ter sido renomeado/excluído)
+        return []
+    registros = auditoria_de(tipo).de_execucao(execucao_id)
+    return _flags_do_registro(registros[0]) if registros else []
+
+
 def _pendencias() -> dict:
     descoberta = []
     for tipo in listar_tipos():
         decisao = estado.slot_de(tipo).ler()
         if decisao is not None and decisao.estado == "pendente":
-            descoberta.append({"tipo": tipo, "decisao": decisao})
-    publicacao = [r for r in historico.listar() if r["status"] == "aguardando_publicacao"]
+            descoberta.append({
+                "tipo": tipo,
+                "decisao": decisao,
+                "conformidade": _flags_tema(tipo, decisao.tema),
+            })
+    publicacao = []
+    for r in historico.listar():
+        if r["status"] == "aguardando_publicacao":
+            r = {**r, "conformidade": _flags_publicacao(r["tipo_id"], r["id"])}
+            publicacao.append(r)
     return {"descoberta": descoberta, "publicacao": publicacao}
 
 
