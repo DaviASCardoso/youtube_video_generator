@@ -2,12 +2,30 @@
 
 Transforma o **tema decidido** pela Descoberta no **artefato de mídia final**: um
 `video_final.mp4` + um `sidecar.json` que descreve o vídeo (tema, roteiro, duração,
-provedores/custos) e serve de handoff para a Publicação.
+`modo_visual` (fonte do fundo usada), `hook` (abertura do roteiro), provedores/custos)
+e serve de handoff para a Publicação e o Feedback.
 
 A spec de referência é `PILAR_2_GERACAO.md` (raiz), sob dois princípios:
 **eficiência** (nunca pagar duas vezes; nunca pagar uma etapa antes de validar a
 anterior) e **configurabilidade** (todo provedor/parâmetro/toggle é editável no
 painel, na aba "Geração").
+
+## Camadas visuais (compostas e independentes)
+
+O visual são **três camadas independentes** (substituem os dois modos empacotados;
+`imagens.modo` virou só a fonte de migração). Cada uma liga/desliga e configura sozinha
+no painel; os defaults (`"auto"`) reproduzem os dois presets de antes, migrando do
+legado `imagens.modo` (`ia` → fundo IA + personagem off; `personagem` → fundo Pexels
++ personagem on). Qualquer combinação é possível.
+
+- **Fundo** (`geracao.visuais.fundo`: `auto`|`ia`|`pexels`) — a fonte do backdrop,
+  independente do personagem. O provedor de visuais **segue a fonte do fundo**
+  (`provedor: "auto"` → `ia`→flux, `pexels`→pexels).
+- **Personagem** (`geracao.visuais.personagem`: `auto`|`sim`|`nao`) — camada de PNG do
+  personagem, composta pelo pipeline sobre qualquer fundo; posição/tamanho/margens em
+  `imagens.personagem.*`.
+- **Legenda** (`geracao.legendas`) — burn-in opcional com fonte/cor/posição/contorno
+  (as mesmas alavancas do texto da thumbnail).
 
 ## Pipeline em estágios
 
@@ -28,15 +46,15 @@ Fonte da verdade da config e helpers do pipeline:
 - `gates.py` — validação estrutural entre estágios (roteiro/plano/narração/visuais).
 - `custo.py` — tabelas-estimativa, `Ledger`, gasto diário e `checar_orcamento()`.
 - `variacao.py` — variação deliberada de abertura/estrutura/estilo/música (0 = idêntico; semeável).
-- `sidecar.py` — escreve/lê o `sidecar.json` (handoff para a Publicação).
-- `legendas.py` — SRT + burn-in opcional (default off).
+- `sidecar.py` — escreve/lê o `sidecar.json` (handoff para a Publicação e o Feedback; grava `modo_visual`/`hook`).
+- `legendas.py` — SRT + burn-in opcional (default off) com estilo de fonte/contorno.
 - `pipeline.py` — `gerar_video()`: orquestra os estágios acima.
 
 Provedores plugáveis por papel (`provedores/`):
-- `base.py` — registro `(papel, nome) → provedor`; `obter()`, `provedores_de()`.
+- `base.py` — registro `(papel, nome) → provedor`; `obter()`, `provedores_de()`, `provedor_visuais_para_fundo()`.
 - `roteiro_groq.py` — roteiro via Groq.
-- `visuais_flux.py` — plano (prompts) + render por IA (Together/FLUX), modo "ia".
-- `visuais_pexels.py` — plano (emoção+busca) + foto Pexels compondo o personagem, modo "personagem".
+- `visuais_flux.py` — plano (prompts) + render por IA (Together/FLUX), fundo "ia".
+- `visuais_pexels.py` — plano (emoção+busca) + foto Pexels de fundo (**só o fundo**; o personagem é camada do pipeline), fundo "pexels".
 - `narracao_google.py` — narração via Google TTS (com override de voz para o fallback).
 - *(seam documentado: ElevenLabs entra como `(narracao, "elevenlabs")` sem tocar no pipeline.)*
 
@@ -44,12 +62,12 @@ Chamadas externas concretas embrulhadas pelos provedores:
 - `generate_script.py` / `generate_scene.py` — chamadas Groq (roteiro e plano).
 - `generate_image.py` — imagem por IA (Together / FLUX.2).
 - `generate_voice.py` — narração (Google Cloud TTS).
-- `compositor.py` — foto de fundo + PNG do personagem (modo "personagem").
+- `compositor.py` — `compor_fundo()` (camada de fundo) + `sobrepor_personagem()` (camada de personagem); `compor_cena()` empilha as duas (compat).
 - `pexels.py` — busca de fotos de fundo no Pexels.
 
 ## Artefatos escritos em `output/<tipo>/<timestamp>/` (gitignored)
 
-`roteiro.txt`, `prompts.txt` (modo ia) ou `cenas.txt` (modo personagem),
+`roteiro.txt`, `prompts.txt` (fundo ia) ou `cenas.txt` (fundo pexels),
 `images/imagem_N.png`, `audio/frase_N.mp3`, `legendas.srt` (se ligado),
 `video_final.mp4` e `sidecar.json`.
 
