@@ -72,7 +72,7 @@ def test_inputs_completos(make_tipo, pasta_run):
     assert inputs["categoria"] == "trending"
     assert inputs["fit_score"] == 82
     assert inputs["voz"] == "v"
-    assert inputs["modo_visual"] == "personagem"  # do sidecar (pexels)
+    assert inputs["modo_visual"] == "pexels"  # deduzido dos provedores (fonte do fundo)
     assert inputs["hook"] == "Você acha que precisa de mais uma técnica?"
     assert inputs["titulo"] == "A verdade sobre foco"
     assert inputs["publish_time"] == 14

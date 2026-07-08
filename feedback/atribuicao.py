@@ -5,7 +5,7 @@ lido **do que já foi gravado** — sem forçar nenhum pilar upstream a registra
 novo:
 
   fonte / categoria / fit_score  ← histórico da Descoberta (tema decidido), casado por tema
-  modo_visual / hook / duracao   ← sidecar.json da Geração
+  modo_visual / hook / duracao   ← sidecar.json da Geração (modo_visual = fonte do fundo: ia/pexels)
   titulo / thumbnail             ← publicacao.json (metadados/thumb escolhidos)
   publish_time                   ← hora de publicação (do registro de métricas)
   voz                            ← config do tipo (aproximação: não é gravada por vídeo)
@@ -39,9 +39,10 @@ def _modo_visual(sidecar: dict, config) -> str | None:
     explicito = sidecar.get("modo_visual")
     if explicito:
         return explicito
+    # Sidecars antigos: deduz a fonte do fundo pelos provedores (pexels/flux → pexels/ia).
     provs = " ".join(str(v) for v in (sidecar.get("provedores") or {}).values()).lower()
     if "pexels" in provs:
-        return "personagem"
+        return "pexels"
     if "flux" in provs:
         return "ia"
     try:

@@ -31,7 +31,9 @@ ROTAS = {
         "direcao": {"trending": -1, "evergreen": +1},
     },
     "voz": {"classe": "set", "pilar": "geracao", "alvo": "tts.voz"},
-    "modo_visual": {"classe": "set", "pilar": "geracao", "alvo": "imagens.modo"},
+    # A camada de fundo (IA/Pexels) é o knob real desde a decomposição visual — o
+    # modo empacotado (imagens.modo) foi aposentado. O aprendizado gira a fonte do fundo.
+    "modo_visual": {"classe": "set", "pilar": "geracao", "alvo": "geracao.visuais.fundo"},
     "thumbnail": {"classe": "set", "pilar": "publicacao", "alvo": "publicacao.thumbnail.ativo", "booleano": True},
     "hook": {"classe": "guia", "pilar": "geracao", "bloco": "roteiro"},
     "titulo": {"classe": "guia", "pilar": "publicacao", "bloco": "metadados"},
