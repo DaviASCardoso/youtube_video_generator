@@ -88,9 +88,9 @@ def _roteiros_recentes(tipo, n: int, pasta_atual) -> list[str]:
 # --- Borda da Descoberta: veto de tema --------------------------------------
 
 
-def avaliar_tema(tipo, tema: str) -> Veredito:
+def avaliar_tema(tipo, tema: str, auditar: bool = True) -> Veredito:
     """Brand safety de um tema na borda da Descoberta. Inerte (liberado) quando o pilar
-    está desligado. Registra a auditoria."""
+    está desligado. Registra a auditoria (a menos que `auditar=False`, p/ o dry-run)."""
     cfg = _cfg(tipo)
     if not cfg.get("ativo"):
         return Veredito(LIBERADO)
@@ -100,14 +100,15 @@ def avaliar_tema(tipo, tema: str) -> Veredito:
     modo = modo_efetivo("marca", cfg)
     veredito = mrc.avaliar_tema(tema, modo, regras, tipo.config)
 
-    auditoria_de(tipo).registrar({
-        "etapa": "descoberta",
-        "execucao_id": None,
-        "tema": tema,
-        "resultado": veredito.resultado,
-        "checagens": [Checagem("marca", veredito.resultado, veredito.motivo).para_dict()],
-        "regras_versao": regras_store.versao(),
-    })
+    if auditar:
+        auditoria_de(tipo).registrar({
+            "etapa": "descoberta",
+            "execucao_id": None,
+            "tema": tema,
+            "resultado": veredito.resultado,
+            "checagens": [Checagem("marca", veredito.resultado, veredito.motivo).para_dict()],
+            "regras_versao": regras_store.versao(),
+        })
     return veredito
 
 

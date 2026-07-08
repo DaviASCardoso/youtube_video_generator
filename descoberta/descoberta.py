@@ -11,6 +11,7 @@ Grava o tema no slot do tipo, registra o sinal consumido (dedupe futuro) e a
 observabilidade do run. Devolve a Decisao, ou None se nada passou (dia pulado).
 """
 
+from conformidade import conformidade as conformidade_mod
 from descoberta import balanco, dedup, fit, selecao, estado
 from descoberta.candidato import Decisao, agora
 from descoberta.configuracao import FONTES_DISPONIVEIS, mesclar_descoberta
@@ -115,7 +116,20 @@ def decidir_tema(tipo, persistir: bool = True) -> Decisao | None:
                 estado.buffer_de(tipo).substituir(reaproveitados)
         return None
 
+    # Conformidade: veto de brand safety na borda da Descoberta, antes de a produção
+    # gastar. Inerte quando o pilar está desligado. Clear-cut bloqueia (dia pulado);
+    # limítrofe força a revisão humana.
+    veredito = conformidade_mod.avaliar_tema(tipo, melhor.tema or melhor.texto, auditar=persistir)
+    if veredito.bloqueado:
+        if persistir:
+            hist.registrar({**base_registro, "decidido": None, "motivo": "vetado_conformidade"})
+            if cfg["retencao"] == "reter":
+                estado.buffer_de(tipo).substituir(reaproveitados)
+        return None
+
     estado_gate = "pronto" if cfg["modo_revisao"] == "auto" else "pendente"
+    if veredito.sinalizado:
+        estado_gate = "pendente"  # limítrofe → gate de revisão
     decisao = Decisao(
         tema=melhor.tema or melhor.texto,
         fonte=melhor.fonte,
