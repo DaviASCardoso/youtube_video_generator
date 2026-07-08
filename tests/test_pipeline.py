@@ -211,6 +211,12 @@ def test_camada_ia_com_personagem(tmp_path, sistema_temp, make_tipo, ambiente, m
     tipo = make_tipo(config_extra={"geracao": ger})
     pedidos = _instalar_provedores(monkeypatch, visuais=_FakeVisuaisFluxPNG())
 
+    # A emoção é planejada à parte (camada de personagem independente do fundo por IA).
+    monkeypatch.setattr(
+        pipeline.generate_scene, "planejar_emocoes",
+        lambda frases, cfg, ad, ledger=None: ["feliz", "serio"],
+    )
+
     orig = pipeline.sobrepor_personagem
     compostas = []
     monkeypatch.setattr(
@@ -221,7 +227,62 @@ def test_camada_ia_com_personagem(tmp_path, sistema_temp, make_tipo, ambiente, m
     gerar_video("tema", tipo, tmp_path / "out")
 
     assert (pipeline.provedores.PAPEL_VISUAIS, "flux") in pedidos  # fundo por IA
-    assert compostas == ["neutro", "neutro"]  # personagem composto sobre cada cena
+    assert compostas == ["feliz", "serio"]  # emoção por cena, composta sobre o fundo por IA
+    # a emoção foi planejada e checkpointada à parte do plano de fundo (prompts.txt)
+    assert (tmp_path / "out" / "emocoes.txt").read_text(encoding="utf-8").split() == ["feliz", "serio"]
+
+
+def test_pexels_com_personagem_nao_replaneja_emocao(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    # Fundo Pexels + personagem: a emoção vem do próprio plano de cena (uma chamada),
+    # não há replanejamento — sem regressão de custo para o tipo existente.
+    tipo = make_tipo()  # modo personagem -> fundo pexels + personagem
+    _instalar_provedores(monkeypatch, visuais=_FakeVisuaisPexels())
+
+    replanejou = []
+    monkeypatch.setattr(
+        pipeline.generate_scene, "planejar_emocoes",
+        lambda *a, **k: replanejou.append(1) or [],
+    )
+    orig = pipeline.sobrepor_personagem
+    compostas = []
+    monkeypatch.setattr(
+        pipeline, "sobrepor_personagem",
+        lambda cena, emo, cfg, ad: compostas.append(emo) or orig(cena, emo, cfg, ad),
+    )
+
+    gerar_video("tema", tipo, tmp_path / "out")
+
+    assert replanejou == []  # não replaneja: a emoção veio do plano de cena do Pexels
+    assert compostas == ["neutro", "neutro"]
+    assert not (tmp_path / "out" / "emocoes.txt").exists()
+
+
+def test_emocoes_reaproveitadas_no_resume(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    # Resume de fundo por IA + personagem: emocoes.txt existente é reaproveitado (não replaneja).
+    ger = _tipo_geracao(visuais={"fundo": "ia", "personagem": "sim"})
+    tipo = make_tipo(config_extra={"geracao": ger})
+    base = tmp_path / "out"
+    base.mkdir()
+    (base / "roteiro.txt").write_text("frase um\nfrase dois", encoding="utf-8")
+    (base / "prompts.txt").write_text("prompt a\nprompt b", encoding="utf-8")
+    (base / "emocoes.txt").write_text("feliz\nserio", encoding="utf-8")
+    _instalar_provedores(monkeypatch, visuais=_FakeVisuaisFluxPNG())
+
+    replanejou = []
+    monkeypatch.setattr(
+        pipeline.generate_scene, "planejar_emocoes", lambda *a, **k: replanejou.append(1) or [],
+    )
+    orig = pipeline.sobrepor_personagem
+    compostas = []
+    monkeypatch.setattr(
+        pipeline, "sobrepor_personagem",
+        lambda cena, emo, cfg, ad: compostas.append(emo) or orig(cena, emo, cfg, ad),
+    )
+
+    gerar_video("tema", tipo, base)
+
+    assert replanejou == []  # reaproveitou emocoes.txt
+    assert compostas == ["feliz", "serio"]
 
 
 def test_camada_pexels_sem_personagem(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):

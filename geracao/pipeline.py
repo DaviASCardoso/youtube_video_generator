@@ -25,7 +25,7 @@ from PIL import Image
 
 from config.sistema import sistema
 from config.tipos import TipoVideo
-from geracao import gates, legendas, sidecar
+from geracao import gates, generate_scene, legendas, sidecar
 from geracao.checkpoint import deve_reaproveitar
 from geracao.compositor import (
     EMOCAO_PADRAO,
@@ -196,6 +196,42 @@ def _estagio_plano_visual(frases, tipo, base, cfg_ger, politica, rel, nome_visua
 
     gates.validar_plano_visual(frases, dados)
     return prov, dados
+
+
+# --- estágio: plano da camada de personagem (emoção por cena) -------------
+
+
+def _estagio_plano_personagem(frases, dados, tipo, base, politica, rel, nome_visual, personagem_ativo, led, reaproveitar):
+    """Planeja a emoção do personagem por cena, como camada independente do fundo.
+
+    Fundo Pexels já decide a emoção junto da busca (mesma chamada) — nada a fazer.
+    Fundo por IA: a emoção é planejada aqui, à parte (checkpoint próprio `emocoes.txt`),
+    e mesclada no `dado` de cada cena (`prompt` -> `{"prompt", "emocao"}`), para que
+    um fundo por IA também tenha um personagem que muda de expressão."""
+    if not personagem_ativo or nome_visual == "pexels":
+        return dados  # sem personagem, ou o fundo Pexels já planejou a emoção
+
+    caminho = base / "emocoes.txt"
+    emocoes = None
+    if deve_reaproveitar(caminho, reaproveitar):
+        lidas = [l.strip() for l in caminho.read_text(encoding="utf-8").splitlines() if l.strip()]
+        if len(lidas) == len(frases):  # só reaproveita se casa 1:1 com as cenas
+            print(f"Reaproveitando emoções do personagem de {caminho}")
+            emocoes = lidas
+    if emocoes is None:
+        print("Planejando emoções do personagem...")
+        emocoes = resiliencia.executar(
+            lambda: generate_scene.planejar_emocoes(frases, tipo.config, tipo.assets_dir, ledger=led),
+            estagio="plano_personagem",
+            provedor="groq",
+            politica=politica,
+            contexto={"tipo": tipo.id},
+            relatorio=rel,
+        )
+        caminho.write_text("\n".join(emocoes), encoding="utf-8")
+        print(f"Emoções do personagem salvas em: {caminho}")
+
+    return [{"prompt": p, "emocao": e} for p, e in zip(dados, emocoes)]
 
 
 # --- estágio: visuais (render por cena) -----------------------------------
@@ -435,6 +471,9 @@ def gerar_video(
     _checar_cancelamento(cancelado)
     prov_visual, dados = _estagio_plano_visual(
         frases, tipo, base, cfg_ger, politica, rel, nome_visual, var, led, reaproveitar
+    )
+    dados = _estagio_plano_personagem(
+        frases, dados, tipo, base, politica, rel, nome_visual, personagem_ativo, led, reaproveitar
     )
     _checar_cancelamento(cancelado)
     _estagio_visuais(

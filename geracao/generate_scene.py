@@ -13,6 +13,7 @@ from pathlib import Path
 from config.settings import Config
 from feedback import guia
 from geracao.compositor import EMOCAO_PADRAO, EMOCOES
+from geracao.custo import CUSTO_GROQ_CHAMADA
 from geracao.generate_script import _chamar_api, _parsear_prompts, _separar_periodos
 
 _EMOCOES_VALIDAS = set(EMOCOES)
@@ -29,6 +30,42 @@ def _normalizar(cena: dict) -> tuple[str, str]:
         busca = "abstract textured background"
 
     return emocao, busca
+
+
+def planejar_emocoes(frases: list, config: Config, assets_dir: Path, ledger=None) -> list[str]:
+    """Emoção do personagem por frase — a **camada de personagem**, independente da
+    fonte do fundo.
+
+    Faz a mesma chamada de cena (system_prompt_cena.txt), mas só aproveita a emoção
+    (a busca é assunto do fundo Pexels e é ignorada aqui). Assim um fundo por IA
+    também pode ter um personagem que muda de expressão a cada cena — sem acoplar a
+    emoção à foto de banco.
+
+    Args:
+        frases: Lista de (indice, frase) do roteiro.
+
+    Returns:
+        Uma emoção por frase (1:1), normalizada (emoção desconhecida -> neutro).
+    """
+    system = guia.compor(
+        assets_dir, "visual",
+        (Path(assets_dir) / "system_prompt_cena.txt").read_text(encoding="utf-8").strip(),
+    )
+    numeradas = "\n".join(f"{i}. {frase}" for i, frase in frases)
+    resposta = _chamar_api(system, numeradas, config)
+    cenas = _parsear_prompts(resposta)
+
+    if ledger is not None:
+        ledger.registrar(
+            "plano_personagem", "groq", CUSTO_GROQ_CHAMADA, modelo=config.get("groq.modelo")
+        )
+
+    emocoes = []
+    for i in range(len(frases)):
+        cena = cenas[i] if i < len(cenas) and isinstance(cenas[i], dict) else {}
+        emocao, _ = _normalizar(cena)
+        emocoes.append(emocao)
+    return emocoes
 
 
 def gerar_cenas(

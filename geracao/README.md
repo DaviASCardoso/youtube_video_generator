@@ -23,7 +23,10 @@ legado `imagens.modo` (`ia` → fundo IA + personagem off; `personagem` → fund
   (`provedor: "auto"` → `ia`→flux, `pexels`→pexels).
 - **Personagem** (`geracao.visuais.personagem`: `auto`|`sim`|`nao`) — camada de PNG do
   personagem, composta pelo pipeline sobre qualquer fundo; posição/tamanho/margens em
-  `imagens.personagem.*`.
+  `imagens.personagem.*`. A **emoção por cena** é planejada como camada à parte: no fundo
+  Pexels vem do próprio plano de cena (1 chamada); no fundo por IA é planejada em separado
+  (`generate_scene.planejar_emocoes`, checkpoint `emocoes.txt`) — então um fundo por IA
+  também tem expressão por cena, não um `neutro` fixo.
 - **Legenda** (`geracao.legendas`) — burn-in opcional com fonte/cor/posição/contorno
   (as mesmas alavancas do texto da thumbnail).
 
@@ -68,7 +71,7 @@ Chamadas externas concretas embrulhadas pelos provedores:
 ## Artefatos escritos em `output/<tipo>/<timestamp>/` (gitignored)
 
 `roteiro.txt`, `prompts.txt` (fundo ia) ou `cenas.txt` (fundo pexels),
-`images/imagem_N.png`, `audio/frase_N.mp3`, `legendas.srt` (se ligado),
-`video_final.mp4` e `sidecar.json`.
+`emocoes.txt` (só no fundo por IA + personagem), `images/imagem_N.png`,
+`audio/frase_N.mp3`, `legendas.srt` (se ligado), `video_final.mp4` e `sidecar.json`.
 
 Runners: `python -m geracao.pipeline`, `python -m geracao.generate_script`, etc.
