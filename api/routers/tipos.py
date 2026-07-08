@@ -29,6 +29,7 @@ from api.routers.assets import contexto_prompts
 from api.routers.descoberta import contexto_descoberta
 from api.routers.geracao import contexto_geracao
 from api.routers.publicacao import contexto_publicacao
+from api.routers.conformidade import contexto_conformidade
 from api.routers.feedback import contexto_feedback
 from api.routers.operacao import contexto_operacao
 from api.routers.temas import contexto_temas
@@ -220,6 +221,7 @@ def pagina_editar(id: str, request: Request):
             **contexto_publicacao(tipo),
             **contexto_feedback(tipo),
             **contexto_operacao(tipo),
+            **contexto_conformidade(tipo),
             **contexto_temas(tipo),
         },
     )
