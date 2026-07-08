@@ -110,6 +110,23 @@ def test_modo_visual_flux_vira_ia(make_tipo, tmp_path):
     assert inputs["modo_visual"] == "ia"
 
 
+def test_modo_visual_e_hook_explicitos_do_sidecar(make_tipo, tmp_path):
+    # Quando a Geração grava as chaves, a atribuição as usa direto (não deduz).
+    tipo = make_tipo("tipo_teste")
+    p = tmp_path / "r"
+    p.mkdir()
+    (p / "sidecar.json").write_text(json.dumps({
+        "modo_visual": "pexels",
+        "hook": "Uma abertura explícita.",
+        "roteiro": "linha ignorada\noutra",
+        "provedores": {"visuais": "visuais_flux"},  # ignorado: modo_visual é explícito
+    }), encoding="utf-8")
+    ctx = ({}, {"e1": {"id": "e1"}}, lambda rec: p)
+    inputs = atribuicao.inputs_de(tipo, _registro(), ctx)
+    assert inputs["modo_visual"] == "pexels"
+    assert inputs["hook"] == "Uma abertura explícita."
+
+
 # --- atribuir (end-to-end com mocks) ----------------------------------------
 
 

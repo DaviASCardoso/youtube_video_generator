@@ -416,7 +416,8 @@ def gerar_video(
     _checar_cancelamento(cancelado)
     caminho_video, duracao = _estagio_montagem(frases, base, pasta_audio, pasta_imagens, cfg_ger)
 
-    sidecar.escrever(base, sidecar.montar(tema, frases, duracao, led))
+    modo_visual = "personagem" if nome_visual == "pexels" else "ia"
+    sidecar.escrever(base, sidecar.montar(tema, frases, duracao, led, modo_visual=modo_visual))
     gasto_diario.registrar(led.total())
 
     print(f"\nVídeo gerado com sucesso: {caminho_video}")
