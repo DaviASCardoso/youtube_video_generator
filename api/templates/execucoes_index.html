@@ -29,7 +29,36 @@
       <strong>ntfy</strong><br>
       {{ '✅ configurado' if saude.ntfy_configurado else '— não configurado' }}
     </div>
+    {% if saude.caminhos %}
+    {% set caminhos_ruins = saude.caminhos | rejectattr('ok') | list %}
+    <div class="aviso{% if caminhos_ruins %} erro{% endif %}" style="flex:1; min-width:180px">
+      <strong>Armazenamento</strong><br>
+      {% if caminhos_ruins %}
+        ⚠️ indisponível: {{ caminhos_ruins | map(attribute='nome') | join(', ') }}
+      {% else %}
+        ✅ {{ saude.caminhos | length }} raízes OK
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
+
+  {% if saude.caminhos %}
+  <details style="margin-top:0.5rem">
+    <summary>Caminhos de armazenamento</summary>
+    <table>
+      <thead><tr><th>Raiz</th><th>Caminho</th><th>Estado</th></tr></thead>
+      <tbody>
+        {% for c in saude.caminhos %}
+        <tr>
+          <td>{{ c.nome }}</td>
+          <td><code>{{ c.caminho }}</code></td>
+          <td>{{ '✅ gravável' if c.ok else '⚠️ ausente/somente-leitura' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endif %}
 
   {% if saude.credenciais %}
   <p style="margin:0.5rem 0 0"><strong>Credenciais:</strong>
