@@ -19,7 +19,9 @@ from conformidade.configuracao import ESTRATEGIAS, MODOS_CHECK
 from geracao.compositor import POSICOES
 from geracao.configuracao import (
     ACOES_ORCAMENTO,
+    CAMADAS_PERSONAGEM,
     FALLBACKS_VISUAIS,
+    FONTES_FUNDO,
     POSICOES_LEGENDA,
     PROVEDORES_NARRACAO,
     PROVEDORES_ROTEIRO,
@@ -298,6 +300,8 @@ class VisuaisGeracaoConfig(BaseModel):
     provedor: str
     imagens_por_cena: int = Field(ge=1, le=10)
     fallback: str
+    fundo: str
+    personagem: str
 
     @field_validator("provedor")
     @classmethod
@@ -311,6 +315,20 @@ class VisuaisGeracaoConfig(BaseModel):
     def _validar_fallback(cls, v):
         if v not in FALLBACKS_VISUAIS:
             raise ValueError(f"fallback deve ser um de: {', '.join(FALLBACKS_VISUAIS)}")
+        return v
+
+    @field_validator("fundo")
+    @classmethod
+    def _validar_fundo(cls, v):
+        if v not in FONTES_FUNDO:
+            raise ValueError(f"fundo deve ser um de: {', '.join(FONTES_FUNDO)}")
+        return v
+
+    @field_validator("personagem")
+    @classmethod
+    def _validar_personagem(cls, v):
+        if v not in CAMADAS_PERSONAGEM:
+            raise ValueError(f"personagem deve ser um de: {', '.join(CAMADAS_PERSONAGEM)}")
         return v
 
 
@@ -328,9 +346,12 @@ class NarracaoGeracaoConfig(BaseModel):
 
 class LegendasConfig(BaseModel):
     ativo: bool
+    fonte: str = ""
     tamanho: int = Field(ge=8, le=200)
     cor: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     posicao: str
+    contorno_largura: int = Field(ge=0, le=20)
+    contorno_cor: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
 
     @field_validator("posicao")
     @classmethod

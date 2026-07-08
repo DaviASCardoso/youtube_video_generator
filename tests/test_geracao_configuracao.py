@@ -2,7 +2,9 @@ from api import formulario
 from api.schemas import GeracaoConfig
 from geracao.configuracao import (
     ACOES_ORCAMENTO,
+    CAMADAS_PERSONAGEM,
     FALLBACKS_VISUAIS,
+    FONTES_FUNDO,
     GERACAO_PADRAO,
     POSICOES_LEGENDA,
     PROVEDORES_NARRACAO,
@@ -10,6 +12,8 @@ from geracao.configuracao import (
     PROVEDORES_VISUAIS,
     UI_HINTS,
     mesclar_geracao,
+    resolver_fundo,
+    resolver_personagem,
 )
 
 
@@ -102,3 +106,41 @@ def test_mesclar_deep_merge_dentro_de_bloco():
 def test_mesclar_nao_muta_o_default():
     mesclar_geracao({"variacao": {"aberturas": 0.9}})
     assert GERACAO_PADRAO["variacao"]["aberturas"] == 0.3
+
+
+# --- camadas visuais: default "auto" migra dos dois modos empacotados --------
+
+
+def test_defaults_das_camadas_sao_auto():
+    assert GERACAO_PADRAO["visuais"]["fundo"] == "auto"
+    assert GERACAO_PADRAO["visuais"]["personagem"] == "auto"
+    assert GERACAO_PADRAO["visuais"]["fundo"] in FONTES_FUNDO
+    assert GERACAO_PADRAO["visuais"]["personagem"] in CAMADAS_PERSONAGEM
+    # legenda sem contorno por padrão = idêntico a hoje
+    assert GERACAO_PADRAO["legendas"]["contorno_largura"] == 0
+
+
+def test_auto_migra_modo_ia():
+    vis = {"fundo": "auto", "personagem": "auto"}
+    assert resolver_fundo(vis, "ia") == "ia"
+    assert resolver_personagem(vis, "ia") is False
+
+
+def test_auto_migra_modo_personagem():
+    vis = {"fundo": "auto", "personagem": "auto"}
+    assert resolver_fundo(vis, "personagem") == "pexels"
+    assert resolver_personagem(vis, "personagem") is True
+
+
+def test_auto_sem_modo_legado_cai_em_ia_sem_personagem():
+    vis = {"fundo": "auto", "personagem": "auto"}
+    assert resolver_fundo(vis, None) == "ia"
+    assert resolver_personagem(vis, None) is False
+
+
+def test_camadas_explicitas_desacopladas():
+    # combinações novas, impossíveis nos modos empacotados
+    assert resolver_fundo({"fundo": "ia"}, "personagem") == "ia"  # IA + ...
+    assert resolver_personagem({"personagem": "sim"}, "ia") is True  # ... personagem
+    assert resolver_fundo({"fundo": "pexels"}, "ia") == "pexels"  # Pexels + ...
+    assert resolver_personagem({"personagem": "nao"}, "personagem") is False  # ... sem personagem
