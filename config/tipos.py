@@ -5,6 +5,7 @@ import shutil
 import unicodedata
 
 from config.settings import Config
+from conformidade.configuracao import CONFORMIDADE_PADRAO
 from descoberta.configuracao import DESCOBERTA_PADRAO
 from descoberta.temas import FilaDeTemas
 from feedback.configuracao import FEEDBACK_PADRAO
@@ -43,6 +44,7 @@ DEFAULT_CONFIG = {
     "publicacao": PUBLICACAO_PADRAO,
     "feedback": FEEDBACK_PADRAO,
     "operacao": OPERACAO_PADRAO,
+    "conformidade": CONFORMIDADE_PADRAO,
 }
 
 ASSETS_PADRAO = (

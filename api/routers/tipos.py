@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from api import formulario
 from api.schemas import TipoConfig
 from api.templating import templates
+from conformidade.configuracao import mesclar_conformidade
 from descoberta.configuracao import mesclar_descoberta
 from feedback.configuracao import mesclar_feedback
 from geracao.configuracao import mesclar_geracao
@@ -36,7 +37,7 @@ router = APIRouter(prefix="/tipos", tags=["tipos"])
 
 # A aba Config edita nome/ativo + os blocos não-pilar do config.json. Os blocos de
 # pilar (descoberta/geracao/publicacao) têm abas próprias e são preservados no salvar.
-_BLOCOS_PILAR = ("descoberta", "geracao", "publicacao", "feedback", "operacao")
+_BLOCOS_PILAR = ("descoberta", "geracao", "publicacao", "feedback", "operacao", "conformidade")
 CONFIG_TAB_PADRAO = {
     "nome": "",
     "ativo": False,
@@ -239,6 +240,7 @@ async def salvar_config(id: str, request: Request):
     dados["publicacao"] = mesclar_publicacao(atual.get("publicacao"), atual.get("youtube"))
     dados["feedback"] = mesclar_feedback(atual.get("feedback"))
     dados["operacao"] = mesclar_operacao(atual.get("operacao"))
+    dados["conformidade"] = mesclar_conformidade(atual.get("conformidade"))
 
     try:
         validado = TipoConfig(**dados)

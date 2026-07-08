@@ -15,6 +15,7 @@ from feedback.configuracao import (
     MODOS_APLICACAO,
 )
 from operacoes.configuracao import POLITICAS_PARCIAL
+from conformidade.configuracao import ESTRATEGIAS, MODOS_CHECK
 from geracao.compositor import POSICOES
 from geracao.configuracao import (
     ACOES_ORCAMENTO,
@@ -647,6 +648,73 @@ class OperacaoConfig(BaseModel):
         return v
 
 
+def _validar_modo_check(v):
+    if v not in MODOS_CHECK:
+        raise ValueError(f"modo deve ser um de: {', '.join(MODOS_CHECK)}")
+    return v
+
+
+class CheckBloqueioConfig(BaseModel):
+    modo: str
+
+    @field_validator("modo")
+    @classmethod
+    def _validar_modo(cls, v):
+        return _validar_modo_check(v)
+
+
+class MarcaCheckConfig(BaseModel):
+    modo: str
+
+    @field_validator("modo")
+    @classmethod
+    def _validar_modo(cls, v):
+        return _validar_modo_check(v)
+
+
+class AutenticidadeCheckConfig(BaseModel):
+    modo: str
+    variacao_minima: float = Field(ge=0.0, le=1.0)
+    teto_sameness: int = Field(ge=0, le=100)
+    n_recentes: int = Field(ge=1, le=20)
+
+    @field_validator("modo")
+    @classmethod
+    def _validar_modo(cls, v):
+        return _validar_modo_check(v)
+
+
+class FactualCheckConfig(BaseModel):
+    modo: str
+    ativo: bool
+
+    @field_validator("modo")
+    @classmethod
+    def _validar_modo(cls, v):
+        return _validar_modo_check(v)
+
+
+class ChecagensConfig(BaseModel):
+    disclosure: CheckBloqueioConfig
+    licenciamento: CheckBloqueioConfig
+    marca: MarcaCheckConfig
+    autenticidade: AutenticidadeCheckConfig
+    factual: FactualCheckConfig
+
+
+class ConformidadeConfig(BaseModel):
+    ativo: bool
+    estrategia: str
+    checagens: ChecagensConfig
+
+    @field_validator("estrategia")
+    @classmethod
+    def _validar_estrategia(cls, v):
+        if v not in ESTRATEGIAS:
+            raise ValueError(f"estrategia deve ser uma de: {', '.join(ESTRATEGIAS)}")
+        return v
+
+
 class TipoConfig(BaseModel):
     nome: str = Field(min_length=1)
     ativo: bool
@@ -662,6 +730,7 @@ class TipoConfig(BaseModel):
     publicacao: PublicacaoConfig
     feedback: FeedbackConfig
     operacao: OperacaoConfig
+    conformidade: ConformidadeConfig
 
 
 class CriarTipoForm(BaseModel):

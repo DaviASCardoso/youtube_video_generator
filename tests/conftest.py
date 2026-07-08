@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from conformidade.configuracao import CONFORMIDADE_PADRAO
 from descoberta.configuracao import DESCOBERTA_PADRAO
 from feedback.configuracao import FEEDBACK_PADRAO
 from geracao.configuracao import GERACAO_PADRAO
@@ -135,6 +136,7 @@ _CONFIG_TIPO_PADRAO = {
     "publicacao": PUBLICACAO_PADRAO,
     "feedback": FEEDBACK_PADRAO,
     "operacao": OPERACAO_PADRAO,
+    "conformidade": CONFORMIDADE_PADRAO,
 }
 
 
