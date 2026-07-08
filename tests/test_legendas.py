@@ -57,6 +57,45 @@ def test_sobrepor_compoe_por_cena(monkeypatch):
     assert all(c[0] == "composto" for c in out)
 
 
+def test_sobrepor_aplica_estilo_fonte_e_contorno(monkeypatch):
+    capturados = []
+
+    class _Captura(_FakeTextClip):
+        def __init__(self, **k):
+            capturados.append(k)
+            super().__init__(**k)
+
+    monkeypatch.setattr(legendas, "TextClip", _Captura)
+    monkeypatch.setattr(legendas, "CompositeVideoClip", lambda camadas: ("composto", camadas))
+    legendas.sobrepor_legendas(
+        [_FakeClipe()], [("a", 1.0)],
+        {"posicao": "inferior", "tamanho": 60, "cor": "#FF0000",
+         "fonte": "MinhaFonte.ttf", "contorno_largura": 3, "contorno_cor": "#00FF00"},
+    )
+    k = capturados[0]
+    assert k["font"] == "MinhaFonte.ttf"
+    assert k["font_size"] == 60
+    assert k["color"] == "#FF0000"
+    assert k["stroke_width"] == 3
+    assert k["stroke_color"] == "#00FF00"
+
+
+def test_sobrepor_defaults_sem_contorno(monkeypatch):
+    # Sem config de estilo: contorno 0 e fonte padrão (comportamento idêntico ao de antes).
+    capturados = []
+
+    class _Captura(_FakeTextClip):
+        def __init__(self, **k):
+            capturados.append(k)
+            super().__init__(**k)
+
+    monkeypatch.setattr(legendas, "TextClip", _Captura)
+    monkeypatch.setattr(legendas, "CompositeVideoClip", lambda camadas: ("composto", camadas))
+    legendas.sobrepor_legendas([_FakeClipe()], [("a", 1.0)], {})
+    assert capturados[0]["stroke_width"] == 0
+    assert capturados[0]["font"] is None
+
+
 def test_sobrepor_degrada_em_falha(monkeypatch):
     def _explode(**k):
         raise RuntimeError("sem fonte")

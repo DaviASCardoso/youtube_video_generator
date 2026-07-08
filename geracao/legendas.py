@@ -5,6 +5,11 @@ Duas saídas, ambas derivadas das frases + durações de cada cena:
   estão ligadas);
 - o **burn-in** opcional do texto sobre cada clipe via moviepy `TextClip`.
 
+A camada de legenda expõe as mesmas alavancas de estilo do texto da thumbnail
+(fonte, cor, posição e contorno): o contorno vira `stroke_width`/`stroke_color`
+do `TextClip` (o equivalente ao `stroke` do PIL em `publicacao/thumbnail.py`). Com
+os defaults (contorno 0, fonte vazia) o resultado é idêntico ao de antes.
+
 O burn-in é best-effort: qualquer falha (ex.: sem ImageMagick/fonte) devolve os
 clipes originais — legenda nunca derruba a montagem. Com `legendas.ativo: false`
 (default), nada disto roda e a montagem fica idêntica à de antes.
@@ -60,14 +65,19 @@ def sobrepor_legendas(clipes: list, itens: list[tuple[str, float]], cfg: dict) -
         return clipes
 
     posicao = _POSICOES.get(cfg.get("posicao", "inferior"), ("center", "bottom"))
+    fonte = cfg.get("fonte") or None  # vazio = fonte padrão do moviepy
+    contorno = max(0, int(cfg.get("contorno_largura", 0)))  # 0 = sem contorno (idêntico a hoje)
     novos = []
     for clipe, (texto, _) in zip(clipes, itens):
         try:
             legenda = (
                 TextClip(
                     text=str(texto).strip(),
+                    font=fonte,
                     font_size=cfg.get("tamanho", 48),
                     color=cfg.get("cor", "#FFFFFF"),
+                    stroke_color=cfg.get("contorno_cor", "#000000"),
+                    stroke_width=contorno,
                 )
                 .with_duration(clipe.duration)
                 .with_position(posicao)
