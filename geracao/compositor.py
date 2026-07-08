@@ -89,35 +89,47 @@ def _cobrir(fundo: Image.Image, largura: int, altura: int) -> Image.Image:
     return novo.crop((x, y, x + largura, y + altura))
 
 
-def compor_cena(
-    fundo_bytes: bytes | None,
-    emocao: str,
-    config: Config,
-    assets_dir: Path,
-    indice: int = 0,
+def compor_fundo(
+    fundo_bytes: bytes | None, config: Config, indice: int = 0
 ) -> Image.Image:
-    """Monta o quadro final de uma cena.
+    """A **camada de fundo**: a foto do banco (ou um placeholder) recortada para o
+    canvas. É o que a camada de personagem sobrepõe — e o que sai sozinho quando a
+    camada de personagem está desligada.
 
     Args:
         fundo_bytes: Bytes da foto de fundo (None -> gradiente de placeholder).
-        emocao: Emoção do personagem (fora de EMOCOES -> neutro).
-        config: Config do tipo (lê imagens.largura/altura e imagens.personagem.*).
-        assets_dir: Pasta de assets do tipo (onde estão os PNGs do personagem).
+        config: Config do tipo (lê imagens.largura/altura).
         indice: Índice da cena, só para variar a cor do placeholder.
     """
     largura = config.get("imagens.largura")
     altura = config.get("imagens.altura")
+    fundo = Image.open(io.BytesIO(fundo_bytes)) if fundo_bytes else _fundo_placeholder(
+        indice, largura, altura
+    )
+    return _cobrir(fundo, largura, altura)
+
+
+def sobrepor_personagem(
+    cena: Image.Image, emocao: str, config: Config, assets_dir: Path
+) -> Image.Image:
+    """A **camada de personagem**: cola o PNG da emoção sobre um quadro já pronto.
+
+    Independente da fonte do fundo — funciona sobre uma foto do Pexels **ou** sobre
+    uma imagem gerada por IA. Posição/tamanho/margens vêm de `imagens.personagem.*`;
+    o canvas de referência é o do próprio quadro recebido (não o config), para
+    posicionar certo mesmo quando o fundo por IA tem outra proporção.
+
+    Args:
+        cena: Quadro de fundo já recortado (modificado in-place e devolvido).
+        emocao: Emoção do personagem (fora de EMOCOES -> neutro).
+        config: Config do tipo (lê imagens.personagem.*).
+        assets_dir: Pasta de assets do tipo (onde estão os PNGs do personagem).
+    """
+    largura, altura = cena.width, cena.height
     posicao = config.get("imagens.personagem.posicao")
     altura_pct = config.get("imagens.personagem.altura_percentual")
     margem_lateral = config.get("imagens.personagem.margem_lateral")
     margem_vertical = config.get("imagens.personagem.margem_vertical")
-
-    if fundo_bytes:
-        fundo = Image.open(io.BytesIO(fundo_bytes))
-    else:
-        fundo = _fundo_placeholder(indice, largura, altura)
-
-    cena = _cobrir(fundo, largura, altura)
 
     personagem = _carregar_personagem(assets_dir, emocao)
     escala = (altura * altura_pct / 100) / personagem.height
@@ -128,5 +140,20 @@ def compor_cena(
     x = margem_lateral if "esquerdo" in posicao else largura - margem_lateral - p.width
     y = margem_vertical if "superior" in posicao else altura - margem_vertical - p.height
     cena.paste(p, (x, y), p)
-
     return cena
+
+
+def compor_cena(
+    fundo_bytes: bytes | None,
+    emocao: str,
+    config: Config,
+    assets_dir: Path,
+    indice: int = 0,
+) -> Image.Image:
+    """Fundo + personagem num só passo (as duas camadas empilhadas).
+
+    Mantido por compatibilidade; o pipeline agora empilha as camadas separadamente
+    (`compor_fundo` + `sobrepor_personagem`) para que cada uma seja independente.
+    """
+    cena = compor_fundo(fundo_bytes, config, indice)
+    return sobrepor_personagem(cena, emocao, config, assets_dir)

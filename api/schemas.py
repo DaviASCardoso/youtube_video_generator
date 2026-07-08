@@ -14,10 +14,14 @@ from feedback.configuracao import (
     METRICAS_DISPONIVEIS,
     MODOS_APLICACAO,
 )
+from operacoes.configuracao import POLITICAS_PARCIAL
+from conformidade.configuracao import ESTRATEGIAS, MODOS_CHECK
 from geracao.compositor import POSICOES
 from geracao.configuracao import (
     ACOES_ORCAMENTO,
+    CAMADAS_PERSONAGEM,
     FALLBACKS_VISUAIS,
+    FONTES_FUNDO,
     POSICOES_LEGENDA,
     PROVEDORES_NARRACAO,
     PROVEDORES_ROTEIRO,
@@ -46,6 +50,12 @@ class SistemaSaida(BaseModel):
     pasta_base: str = Field(min_length=1)
 
 
+class SistemaCaminhos(BaseModel):
+    execucoes: str = Field(min_length=1)
+    tendencias: str = Field(min_length=1)
+    tipos: str = Field(min_length=1)
+
+
 class SistemaVideo(BaseModel):
     fps: int = Field(ge=1, le=120)
     codec: str = Field(min_length=1)
@@ -55,6 +65,7 @@ class SistemaVideo(BaseModel):
 class SistemaConfig(BaseModel):
     execucao: SistemaExecucao
     saida: SistemaSaida
+    caminhos: SistemaCaminhos
     video: SistemaVideo
 
 
@@ -296,6 +307,8 @@ class VisuaisGeracaoConfig(BaseModel):
     provedor: str
     imagens_por_cena: int = Field(ge=1, le=10)
     fallback: str
+    fundo: str
+    personagem: str
 
     @field_validator("provedor")
     @classmethod
@@ -309,6 +322,20 @@ class VisuaisGeracaoConfig(BaseModel):
     def _validar_fallback(cls, v):
         if v not in FALLBACKS_VISUAIS:
             raise ValueError(f"fallback deve ser um de: {', '.join(FALLBACKS_VISUAIS)}")
+        return v
+
+    @field_validator("fundo")
+    @classmethod
+    def _validar_fundo(cls, v):
+        if v not in FONTES_FUNDO:
+            raise ValueError(f"fundo deve ser um de: {', '.join(FONTES_FUNDO)}")
+        return v
+
+    @field_validator("personagem")
+    @classmethod
+    def _validar_personagem(cls, v):
+        if v not in CAMADAS_PERSONAGEM:
+            raise ValueError(f"personagem deve ser um de: {', '.join(CAMADAS_PERSONAGEM)}")
         return v
 
 
@@ -326,9 +353,12 @@ class NarracaoGeracaoConfig(BaseModel):
 
 class LegendasConfig(BaseModel):
     ativo: bool
+    fonte: str = ""
     tamanho: int = Field(ge=8, le=200)
     cor: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     posicao: str
+    contorno_largura: int = Field(ge=0, le=20)
+    contorno_cor: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
 
     @field_validator("posicao")
     @classmethod
@@ -596,6 +626,123 @@ class FeedbackConfig(BaseModel):
         return v
 
 
+class JobsOperacaoConfig(BaseModel):
+    descoberta: bool
+    geracao: bool
+    publicacao: bool
+    feedback: bool
+
+
+class CapsEstagioConfig(BaseModel):
+    roteiro: int = Field(ge=0, le=10)
+    plano_visual: int = Field(ge=0, le=10)
+    visuais: int = Field(ge=0, le=10)
+    narracao: int = Field(ge=0, le=10)
+    montagem: int = Field(ge=0, le=10)
+    publicacao: int = Field(ge=0, le=10)
+
+
+class BackoffConfig(BaseModel):
+    base_seg: float = Field(ge=0.0, le=60.0)
+    teto_seg: float = Field(ge=0.0, le=600.0)
+    jitter: float = Field(ge=0.0, le=1.0)
+
+
+class CircuitoConfig(BaseModel):
+    limiar_falhas: int = Field(ge=1, le=50)
+    cooldown_seg: int = Field(ge=1, le=86400)
+    janela_saude_seg: int = Field(ge=60, le=86400)
+
+
+class DeferHorasConfig(BaseModel):
+    quota: int = Field(ge=1, le=168)
+    orcamento: int = Field(ge=1, le=168)
+
+
+class OperacaoConfig(BaseModel):
+    jobs: JobsOperacaoConfig
+    caps_por_estagio: CapsEstagioConfig
+    backoff: BackoffConfig
+    circuito: CircuitoConfig
+    failover: bool
+    falha_parcial: str
+    defer_horas: DeferHorasConfig
+
+    @field_validator("falha_parcial")
+    @classmethod
+    def _validar_falha_parcial(cls, v):
+        if v not in POLITICAS_PARCIAL:
+            raise ValueError(f"falha_parcial deve ser uma de: {', '.join(POLITICAS_PARCIAL)}")
+        return v
+
+
+def _validar_modo_check(v):
+    if v not in MODOS_CHECK:
+        raise ValueError(f"modo deve ser um de: {', '.join(MODOS_CHECK)}")
+    return v
+
+
+class CheckBloqueioConfig(BaseModel):
+    modo: str
+
+    @field_validator("modo")
+    @classmethod
+    def _validar_modo(cls, v):
+        return _validar_modo_check(v)
+
+
+class MarcaCheckConfig(BaseModel):
+    modo: str
+
+    @field_validator("modo")
+    @classmethod
+    def _validar_modo(cls, v):
+        return _validar_modo_check(v)
+
+
+class AutenticidadeCheckConfig(BaseModel):
+    modo: str
+    variacao_minima: float = Field(ge=0.0, le=1.0)
+    teto_sameness: int = Field(ge=0, le=100)
+    n_recentes: int = Field(ge=1, le=20)
+
+    @field_validator("modo")
+    @classmethod
+    def _validar_modo(cls, v):
+        return _validar_modo_check(v)
+
+
+class FactualCheckConfig(BaseModel):
+    modo: str
+    ativo: bool
+
+    @field_validator("modo")
+    @classmethod
+    def _validar_modo(cls, v):
+        return _validar_modo_check(v)
+
+
+class ChecagensConfig(BaseModel):
+    disclosure: CheckBloqueioConfig
+    licenciamento: CheckBloqueioConfig
+    marca: MarcaCheckConfig
+    autenticidade: AutenticidadeCheckConfig
+    factual: FactualCheckConfig
+
+
+class ConformidadeConfig(BaseModel):
+    ativo: bool
+    estrategia: str
+    checagens: ChecagensConfig
+
+    @field_validator("estrategia")
+    @classmethod
+    def _validar_estrategia(cls, v):
+        if v not in ESTRATEGIAS:
+            raise ValueError(f"estrategia deve ser uma de: {', '.join(ESTRATEGIAS)}")
+        return v
+
+
 class TipoConfig(BaseModel):
     nome: str = Field(min_length=1)
     ativo: bool
@@ -610,6 +757,8 @@ class TipoConfig(BaseModel):
     geracao: GeracaoConfig
     publicacao: PublicacaoConfig
     feedback: FeedbackConfig
+    operacao: OperacaoConfig
+    conformidade: ConformidadeConfig
 
 
 class CriarTipoForm(BaseModel):

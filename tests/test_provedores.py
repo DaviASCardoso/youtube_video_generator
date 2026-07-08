@@ -160,13 +160,17 @@ def test_visuais_pexels_renderizar_com_foto(make_tipo, monkeypatch):
     assert led.provedores()["visuais"] == "pexels"
 
 
-def test_visuais_pexels_planejar_falha_sem_personagem(make_tipo, monkeypatch):
+def test_visuais_pexels_planejar_nao_exige_personagem(make_tipo, monkeypatch):
+    # A camada de fundo (Pexels) é independente do personagem: planejar o fundo
+    # não requer PNG de personagem. O fail-fast vive no pipeline, ligado à camada
+    # de personagem (não à fonte do fundo).
     tipo = make_tipo(com_personagem=False)
     monkeypatch.setattr(
-        "geracao.provedores.visuais_pexels._chamar_api", lambda s, u, c: "[]"
+        "geracao.provedores.visuais_pexels._chamar_api",
+        lambda s, u, c: '[{"emocao": "neutro", "busca": "office"}]',
     )
-    with pytest.raises(FileNotFoundError):
-        VisuaisPexels().planejar([(1, "a")], tipo.config, tipo.assets_dir)
+    dados = VisuaisPexels().planejar([(1, "a")], tipo.config, tipo.assets_dir)
+    assert dados[0]["busca"] == "office"
 
 
 # --- narração (Google) ----------------------------------------------------

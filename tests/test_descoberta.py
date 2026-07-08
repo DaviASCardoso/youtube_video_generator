@@ -143,3 +143,44 @@ def test_dry_run_nao_grava(make_tipo, monkeypatch, isolar):
     assert d is not None
     assert estado.slot_de(tipo).ler() is None
     assert estado.historico_de(tipo).listar() == []
+
+
+# --- veto de conformidade na borda da Descoberta ----------------------------
+
+
+def test_veto_conformidade_bloqueia(make_tipo, monkeypatch, isolar):
+    from conformidade.parecer import BLOQUEADO, Veredito
+
+    tipo = make_tipo()
+    monkeypatch.setattr(orq, "_coletar", lambda t, c: ([_c("A")], {}))
+    _aprovar_todos(monkeypatch)
+    monkeypatch.setattr(orq.conformidade_mod, "avaliar_tema", lambda t, tema, auditar=True: Veredito(BLOQUEADO, "termo proibido"))
+
+    d = orq.decidir_tema(tipo)
+    assert d is None  # tema vetado → dia pulado, produção não gasta
+    assert estado.slot_de(tipo).ler() is None
+    motivos = [r.get("motivo") for r in estado.historico_de(tipo).listar()]
+    assert "vetado_conformidade" in motivos
+
+
+def test_veto_conformidade_flag_forca_pendente(make_tipo, monkeypatch, isolar):
+    from conformidade.parecer import FLAG, Veredito
+
+    tipo = make_tipo()  # modo_revisao = auto (default)
+    monkeypatch.setattr(orq, "_coletar", lambda t, c: ([_c("A")], {}))
+    _aprovar_todos(monkeypatch)
+    monkeypatch.setattr(orq.conformidade_mod, "avaliar_tema", lambda t, tema, auditar=True: Veredito(FLAG, "limítrofe"))
+
+    d = orq.decidir_tema(tipo)
+    assert d.estado == "pendente"  # limítrofe → revisão humana mesmo com auto
+    assert estado.slot_de(tipo).ler().estado == "pendente"
+
+
+def test_veto_inerte_por_padrao_nao_bloqueia(make_tipo, monkeypatch, isolar):
+    # pilar desligado (default): um tema com termo de bloqueio ainda decide normalmente
+    tipo = make_tipo()
+    monkeypatch.setattr(orq, "_coletar", lambda t, c: ([_c("um relato de tortura")], {}))
+    _aprovar_todos(monkeypatch)
+
+    d = orq.decidir_tema(tipo)
+    assert d is not None and d.estado == "pronto"

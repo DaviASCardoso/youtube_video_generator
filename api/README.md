@@ -63,7 +63,10 @@ Ficam em Operações (transversal) para qualquer pilar poder usar sem importar a
 
 - `operacoes/saude.py` — leitura **pura** dos sinais que o dashboard mostra: scheduler
   rodando, disco livre, credenciais (expirando/expirada), gasto do dia vs teto, cota vs
-  cap, último publish por tipo. Não computa nem força nada.
+  cap, último publish por tipo, e a **saúde das raízes de armazenamento** (`caminhos_saude()`
+  → cada raiz de `config/caminhos.py` existe e é gravável?). Não computa nem força nada. Uma
+  raiz apontando para um mount (NAS) ausente/somente-leitura vira sinal no `/execucoes` (e um
+  alerta `disco_baixo` no `verificar_e_alertar`), em vez de estourar no meio de um run.
 - `operacoes/notificacoes.py` — canal **ntfy** (`emitir(categoria, titulo, msg)`, POST via
   urllib). Config tunável (liga/desliga por categoria, prioridade, horas de silêncio) no
   `sistema.json`, bloco `notificacoes`; os campos sensíveis (server/topic/token) no `.env`

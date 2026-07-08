@@ -16,8 +16,10 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from config import caminhos
+
 BASE = Path(__file__).parent
-_QUOTA_PATH = BASE.parent / "execucoes" / "quota_publicacao.json"
+_QUOTA_PATH = caminhos.raiz("execucoes") / "quota_publicacao.json"
 
 
 class QuotaDiaria:

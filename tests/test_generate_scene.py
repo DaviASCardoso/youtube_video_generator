@@ -4,7 +4,8 @@ import pytest
 
 from config.settings import Config
 from geracao import generate_scene
-from geracao.generate_scene import _normalizar, gerar_cenas
+from geracao.custo import Ledger
+from geracao.generate_scene import _normalizar, gerar_cenas, planejar_emocoes
 
 
 def test_normalizar_emocao_valida():
@@ -63,6 +64,38 @@ def test_gerar_cenas_alinha_e_normaliza(tmp_path, monkeypatch):
     assert cenas[0] == (1, "Frase um bem grande.", "feliz", "sunrise")
     # segunda cena caiu nos fallbacks
     assert cenas[1] == (2, "Frase dois bem grande.", "neutro", "abstract textured background")
+
+
+def test_planejar_emocoes_uma_por_frase(tmp_path, monkeypatch):
+    # A camada de personagem planeja só a emoção (ignora a busca), 1:1 com as frases.
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "system_prompt_cena.txt").write_text("instrucao", encoding="utf-8")
+
+    monkeypatch.setattr(
+        generate_scene, "_chamar_api",
+        lambda *a, **k: json.dumps([
+            {"emocao": "feliz", "busca": "ignorada"},
+            {"emocao": "invalida", "busca": "x"},  # -> neutro
+        ]),
+    )
+    led = Ledger()
+    emocoes = planejar_emocoes([(1, "Frase um."), (2, "Frase dois.")], _config(tmp_path), assets, ledger=led)
+    assert emocoes == ["feliz", "neutro"]
+    assert led.provedores()["plano_personagem"] == "groq"
+
+
+def test_planejar_emocoes_menos_decisoes_que_frases(tmp_path, monkeypatch):
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "system_prompt_cena.txt").write_text("instrucao", encoding="utf-8")
+
+    monkeypatch.setattr(
+        generate_scene, "_chamar_api",
+        lambda *a, **k: json.dumps([{"emocao": "serio", "busca": "x"}]),  # só uma
+    )
+    emocoes = planejar_emocoes([(1, "a"), (2, "b"), (3, "c")], _config(tmp_path), assets)
+    assert emocoes == ["serio", "neutro", "neutro"]  # 1:1, resto no fallback
 
 
 def test_gerar_cenas_menos_decisoes_que_frases(tmp_path, monkeypatch):

@@ -5,9 +5,11 @@ from pydantic import ValidationError
 from api import formulario
 from api.schemas import TipoConfig
 from api.templating import templates
+from conformidade.configuracao import mesclar_conformidade
 from descoberta.configuracao import mesclar_descoberta
 from feedback.configuracao import mesclar_feedback
 from geracao.configuracao import mesclar_geracao
+from operacoes.configuracao import mesclar_operacao
 from publicacao.configuracao import mesclar_publicacao
 from operacoes import scheduler as scheduler_mod
 from config.constantes import FREQUENCIAS, MODOS_IMAGEM, VISIBILIDADES
@@ -27,14 +29,16 @@ from api.routers.assets import contexto_prompts
 from api.routers.descoberta import contexto_descoberta
 from api.routers.geracao import contexto_geracao
 from api.routers.publicacao import contexto_publicacao
+from api.routers.conformidade import contexto_conformidade
 from api.routers.feedback import contexto_feedback
+from api.routers.operacao import contexto_operacao
 from api.routers.temas import contexto_temas
 
 router = APIRouter(prefix="/tipos", tags=["tipos"])
 
 # A aba Config edita nome/ativo + os blocos não-pilar do config.json. Os blocos de
 # pilar (descoberta/geracao/publicacao) têm abas próprias e são preservados no salvar.
-_BLOCOS_PILAR = ("descoberta", "geracao", "publicacao", "feedback")
+_BLOCOS_PILAR = ("descoberta", "geracao", "publicacao", "feedback", "operacao", "conformidade")
 CONFIG_TAB_PADRAO = {
     "nome": "",
     "ativo": False,
@@ -216,6 +220,8 @@ def pagina_editar(id: str, request: Request):
             **contexto_geracao(tipo),
             **contexto_publicacao(tipo),
             **contexto_feedback(tipo),
+            **contexto_operacao(tipo),
+            **contexto_conformidade(tipo),
             **contexto_temas(tipo),
         },
     )
@@ -235,6 +241,8 @@ async def salvar_config(id: str, request: Request):
     dados["geracao"] = mesclar_geracao(atual.get("geracao"))
     dados["publicacao"] = mesclar_publicacao(atual.get("publicacao"), atual.get("youtube"))
     dados["feedback"] = mesclar_feedback(atual.get("feedback"))
+    dados["operacao"] = mesclar_operacao(atual.get("operacao"))
+    dados["conformidade"] = mesclar_conformidade(atual.get("conformidade"))
 
     try:
         validado = TipoConfig(**dados)

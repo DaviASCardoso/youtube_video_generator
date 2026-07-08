@@ -5,7 +5,7 @@ lido **do que já foi gravado** — sem forçar nenhum pilar upstream a registra
 novo:
 
   fonte / categoria / fit_score  ← histórico da Descoberta (tema decidido), casado por tema
-  modo_visual / hook / duracao   ← sidecar.json da Geração
+  modo_visual / hook / duracao   ← sidecar.json da Geração (modo_visual = fonte do fundo: ia/pexels)
   titulo / thumbnail             ← publicacao.json (metadados/thumb escolhidos)
   publish_time                   ← hora de publicação (do registro de métricas)
   voz                            ← config do tipo (aproximação: não é gravada por vídeo)
@@ -34,9 +34,15 @@ def _hora(publicado_em) -> int | None:
 
 
 def _modo_visual(sidecar: dict, config) -> str | None:
+    # A Geração grava `modo_visual` explicitamente; casos antigos (sidecar sem a
+    # chave) caem na dedução pelos provedores e, por fim, no config do tipo.
+    explicito = sidecar.get("modo_visual")
+    if explicito:
+        return explicito
+    # Sidecars antigos: deduz a fonte do fundo pelos provedores (pexels/flux → pexels/ia).
     provs = " ".join(str(v) for v in (sidecar.get("provedores") or {}).values()).lower()
     if "pexels" in provs:
-        return "personagem"
+        return "pexels"
     if "flux" in provs:
         return "ia"
     try:
@@ -45,7 +51,12 @@ def _modo_visual(sidecar: dict, config) -> str | None:
         return None
 
 
-def _hook(roteiro) -> str | None:
+def _hook(sidecar: dict) -> str | None:
+    # A Geração grava `hook` explicitamente; sidecars antigos caem na 1ª linha do roteiro.
+    explicito = sidecar.get("hook")
+    if explicito:
+        return str(explicito).strip() or None
+    roteiro = sidecar.get("roteiro")
     if not roteiro:
         return None
     primeira = str(roteiro).splitlines()[0].strip()
@@ -97,7 +108,7 @@ def inputs_de(tipo, registro: dict, ctx) -> dict:
         "fit_score": decidido.get("fit_score"),
         "voz": _voz(tipo),
         "modo_visual": _modo_visual(sidecar, tipo.config),
-        "hook": _hook(sidecar.get("roteiro")),
+        "hook": _hook(sidecar),
         "titulo": (pub.get("metadados") or {}).get("titulo"),
         "publish_time": _hora(registro.get("publicado_em")),
         "duracao": sidecar.get("duracao_seg"),

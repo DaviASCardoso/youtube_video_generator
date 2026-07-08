@@ -64,8 +64,15 @@ def provedores_de(papel: str) -> list[str]:
     return sorted(n for (p, n) in _REGISTRO if p == papel)
 
 
+def provedor_visuais_para_fundo(fundo: str) -> str:
+    """Deriva o provedor de visuais a partir da **fonte do fundo** (a camada de
+    background), quando `geracao.visuais.provedor` está em "auto". "ia" → flux
+    (FLUX/Together), "pexels" → pexels. A seleção do provedor segue a fonte do fundo
+    escolhida, não mais o modo empacotado (aposentado)."""
+    return "pexels" if fundo == "pexels" else "flux"
+
+
 def provedor_visuais_para_modo(modo: str) -> str:
-    """Deriva o provedor de visuais a partir do `imagens.modo` do tipo, quando
-    `geracao.visuais.provedor` está em "auto" — evita duplicar a fonte da verdade
-    do modo visual. "ia" → flux, "personagem" → pexels."""
+    """Compat: deriva o provedor do legado `imagens.modo`. "ia" → flux,
+    "personagem" → pexels. Prefira `provedor_visuais_para_fundo`."""
     return "pexels" if modo == "personagem" else "flux"

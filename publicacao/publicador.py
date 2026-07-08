@@ -17,7 +17,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from config.tipos import carregar_tipo
-from operacoes import notificacoes
+from operacoes import notificacoes, resiliencia
 from publicacao import metadados as metadados_mod
 from publicacao import thumbnail as thumbnail_mod
 from publicacao.configuracao import mesclar_publicacao
@@ -63,6 +63,7 @@ def _subir_aos_destinos(tipo, pasta_run, execucao_id, metadados, thumb_path, cfg
 
     video_path = Path(pasta_run) / "video_final.mp4"
     disclosure = cfg["visibilidade"]["disclosure_sintetico"]
+    politica = resiliencia.de_tipo(tipo)
 
     for nome, dcfg in _destinos_ativos(cfg):
         # Idempotência: um destino já publicado neste run não sobe de novo.
@@ -104,11 +105,48 @@ def _subir_aos_destinos(tipo, pasta_run, execucao_id, metadados, thumb_path, cfg
             continue
 
         opcoes = _montar_opcoes(cfg, dcfg)
+        # O upload passa pelo motor: erro transitório retenta (backoff honrado+jitter,
+        # teto do estágio "publicacao"); a idempotência (publicacao_de acima) reconcilia
+        # antes de reenviar; quota→adia, auth→halt do destino, exaustão→dead-letter. Cada
+        # desfecho **degrada só este destino** — os outros seguem e o run não quebra.
         try:
-            res = destino.publicar(video_path, metadados, thumb_path, opcoes, tipo)
-        except Exception as e:  # noqa: BLE001 (degrada por destino, não derruba o run)
-            print(f"    [{nome}] upload falhou: {e}")
-            historico.registrar_publicacao_destino(execucao_id, nome, {"status": "erro", "erro": str(e)})
+            res = resiliencia.executar(
+                lambda: destino.publicar(video_path, metadados, thumb_path, opcoes, tipo),
+                estagio="publicacao",
+                provedor=nome,
+                politica=politica,
+                contexto={"destino": nome, "tipo": tipo.id, "execucao": execucao_id},
+            )
+        except resiliencia.Deferir:
+            print(f"    [{nome}] limite/cota durante upload — adiando")
+            historico.registrar_publicacao_destino(execucao_id, nome, {"status": "adiado_cota"})
+            notificacoes.emitir(
+                "cota_atingida",
+                f"Cota de upload atingida — {tipo.nome}",
+                f"Destino {nome}: limite atingido no upload; adiado.",
+            )
+            continue
+        except resiliencia.HaltDestino as e:
+            print(f"    [{nome}] credencial durante upload — halt do destino")
+            historico.registrar_publicacao_destino(
+                execucao_id, nome, {"status": "credencial_expirado", "erro": str(e)}
+            )
+            notificacoes.emitir(
+                "credencial",
+                f"Credencial rejeitada no upload — {tipo.nome}",
+                f"Destino {nome}: {e}",
+            )
+            continue
+        except resiliencia.ResilienciaEsgotada as e:  # transitório esgotado / permanente
+            print(f"    [{nome}] upload esgotou a resiliência ({e.classe}): {e}")
+            historico.registrar_publicacao_destino(
+                execucao_id, nome, {"status": "dead_letter", "classe": e.classe, "erro": str(e)}
+            )
+            notificacoes.emitir(
+                "job_dead_letter",
+                f"Upload em dead-letter — {tipo.nome}",
+                f"Destino {nome}\nClasse: {e.classe}\n{e}",
+            )
             continue
 
         quota_diaria.registrar(credencial)
@@ -126,6 +164,27 @@ def _subir_aos_destinos(tipo, pasta_run, execucao_id, metadados, thumb_path, cfg
         print(f"    [{nome}] publicado: {res['url']}")
 
 
+def _avaliar_conformidade(tipo, pasta_run, cfg, execucao_id):
+    """Roda a Conformidade sobre a publicação (import tardio p/ evitar ciclo). Devolve o
+    `Parecer` (inerte/vazio quando o pilar está desligado)."""
+    from conformidade import conformidade as conformidade_mod
+
+    return conformidade_mod.avaliar_publicacao(tipo, pasta_run, cfg, execucao_id=execucao_id)
+
+
+def _barrar(tipo, execucao_id, parecer, historico) -> str:
+    """Barra a publicação por um bloqueio objetivo da Conformidade (nunca em silêncio)."""
+    motivo = "; ".join(parecer.motivos_bloqueio)
+    print(f"Conformidade BLOQUEOU a publicação: {motivo}")
+    historico.marcar_conformidade_bloqueada(execucao_id, motivo)
+    notificacoes.emitir(
+        "revisao_pendente",
+        f"Publicação bloqueada pela Conformidade — {tipo.nome}",
+        f"Motivo: {motivo}",
+    )
+    return "bloqueado_conformidade"
+
+
 def publicar(tipo, pasta_run, execucao_id, ledger=None) -> str:
     """Publica um run já gerado. Devolve o desfecho: "sem_destino", "aguardando_revisao"
     ou "publicado" (este último mesmo com destinos parcialmente degradados)."""
@@ -137,6 +196,22 @@ def publicar(tipo, pasta_run, execucao_id, ledger=None) -> str:
 
     metadados = metadados_mod.obter_metadados(pasta_run, tipo.config, tipo.assets_dir, ledger=ledger)
     thumb_path = thumbnail_mod.obter_thumbnail(pasta_run, tipo.config, tipo.assets_dir, ledger=ledger)
+
+    # Conformidade: decide o disclosure, bloqueia nas objetivas (disclosure/licença) e
+    # sinaliza nas subjetivas. Inerte quando o pilar está desligado.
+    parecer = _avaliar_conformidade(tipo, pasta_run, cfg, execucao_id)
+    if parecer.bloqueado:
+        return _barrar(tipo, execucao_id, parecer, historico)
+    if parecer.flags and cfg["revisao"] != "revisar":
+        # flags advisory num run auto → força a revisão humana para o humano ver os avisos
+        print(f"Conformidade sinalizou (advisory): {'; '.join(parecer.flags)} — indo para revisão.")
+        historico.marcar_aguardando_publicacao(execucao_id)
+        notificacoes.emitir(
+            "revisao_pendente",
+            f"Vídeo com avisos de conformidade — {tipo.nome}",
+            "Um vídeo tem avisos de conformidade e aguarda sua aprovação.",
+        )
+        return "aguardando_revisao"
 
     if cfg["revisao"] == "revisar":
         print("Publicação em modo revisão — metadados/thumbnail prontos, aguardando aprovação.")
@@ -164,6 +239,13 @@ def publicar_aprovado(execucao_id, ledger=None) -> str:
         raise ValueError("Execução sem pasta de run para publicar.")
 
     cfg = mesclar_publicacao(tipo.config.get_all().get("publicacao"))
+
+    # A aprovação humana pula o `publicar()` — reaplica o bloqueio objetivo aqui, para que
+    # um Aprovar & publicar não passe por cima de um disclosure/licença faltando.
+    parecer = _avaliar_conformidade(tipo, pasta, cfg, execucao_id)
+    if parecer.bloqueado:
+        return _barrar(tipo, execucao_id, parecer, historico)
+
     metadados = metadados_mod.obter_metadados(pasta, tipo.config, tipo.assets_dir, ledger=ledger)
     thumb_path = thumbnail_mod.obter_thumbnail(pasta, tipo.config, tipo.assets_dir, ledger=ledger)
 

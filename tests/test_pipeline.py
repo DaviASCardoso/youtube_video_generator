@@ -64,6 +64,21 @@ class _FakeVisuaisFlux:
         return b"IMGBYTES"
 
 
+class _FakeVisuaisFluxPNG(_FakeVisuaisFlux):
+    """Como o FLUX falso, mas devolve bytes de PNG de verdade — para os testes em que
+    a camada de personagem compõe sobre o fundo por IA (precisa abrir os bytes)."""
+
+    def renderizar(self, indice, dado, config, assets_dir, variacao=None, ledger=None):
+        import io as _io
+
+        type(self).chamou_render = True
+        if ledger is not None:
+            ledger.registrar("visuais", "flux", 0.02)
+        buf = _io.BytesIO()
+        Image.new("RGB", (16, 16), (30, 60, 90)).save(buf, format="PNG")
+        return buf.getvalue()
+
+
 class _FakeVisuaisPexels:
     def planejar(self, frases, config, assets_dir, variacao=None, ledger=None):
         return [{"emocao": "neutro", "busca": "x", "i_fundo": 0} for _ in frases]
@@ -131,7 +146,7 @@ def ambiente(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline, "ImageClip", _FakeImageClip)
     monkeypatch.setattr(pipeline, "concatenate_videoclips", lambda clipes, **k: video)
     monkeypatch.setattr(pipeline, "gasto_diario", GastoDiario(tmp_path / "custo_diario.json"))
-    monkeypatch.setattr(pipeline, "ESPERA_BACKOFF", 0)
+    monkeypatch.setattr("time.sleep", lambda s: None)  # o motor de resiliência não dorme nos testes
     monkeypatch.setattr(
         pipeline, "_fundo_placeholder", lambda i, w, h: Image.new("RGB", (4, 4))
     )
@@ -186,6 +201,104 @@ def test_gerar_video_ramo_ia(tmp_path, sistema_temp, make_tipo, ambiente, monkey
 
     assert (pipeline.provedores.PAPEL_VISUAIS, "flux") in pedidos
     assert (tmp_path / "out" / "prompts.txt").exists()
+
+
+def test_camada_ia_com_personagem(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    # Combo novo, impossível nos modos empacotados: fundo por IA + personagem ligado.
+    # Mantém o bloco imagens do make_tipo (tem personagem.*); as camadas mandam:
+    # fundo "ia" seleciona FLUX, personagem "sim" mantém a camada de personagem.
+    ger = _tipo_geracao(visuais={"fundo": "ia", "personagem": "sim"})
+    tipo = make_tipo(config_extra={"geracao": ger})
+    pedidos = _instalar_provedores(monkeypatch, visuais=_FakeVisuaisFluxPNG())
+
+    # A emoção é planejada à parte (camada de personagem independente do fundo por IA).
+    monkeypatch.setattr(
+        pipeline.generate_scene, "planejar_emocoes",
+        lambda frases, cfg, ad, ledger=None: ["feliz", "serio"],
+    )
+
+    orig = pipeline.sobrepor_personagem
+    compostas = []
+    monkeypatch.setattr(
+        pipeline, "sobrepor_personagem",
+        lambda cena, emo, cfg, ad: compostas.append(emo) or orig(cena, emo, cfg, ad),
+    )
+
+    gerar_video("tema", tipo, tmp_path / "out")
+
+    assert (pipeline.provedores.PAPEL_VISUAIS, "flux") in pedidos  # fundo por IA
+    assert compostas == ["feliz", "serio"]  # emoção por cena, composta sobre o fundo por IA
+    # a emoção foi planejada e checkpointada à parte do plano de fundo (prompts.txt)
+    assert (tmp_path / "out" / "emocoes.txt").read_text(encoding="utf-8").split() == ["feliz", "serio"]
+
+
+def test_pexels_com_personagem_nao_replaneja_emocao(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    # Fundo Pexels + personagem: a emoção vem do próprio plano de cena (uma chamada),
+    # não há replanejamento — sem regressão de custo para o tipo existente.
+    tipo = make_tipo()  # modo personagem -> fundo pexels + personagem
+    _instalar_provedores(monkeypatch, visuais=_FakeVisuaisPexels())
+
+    replanejou = []
+    monkeypatch.setattr(
+        pipeline.generate_scene, "planejar_emocoes",
+        lambda *a, **k: replanejou.append(1) or [],
+    )
+    orig = pipeline.sobrepor_personagem
+    compostas = []
+    monkeypatch.setattr(
+        pipeline, "sobrepor_personagem",
+        lambda cena, emo, cfg, ad: compostas.append(emo) or orig(cena, emo, cfg, ad),
+    )
+
+    gerar_video("tema", tipo, tmp_path / "out")
+
+    assert replanejou == []  # não replaneja: a emoção veio do plano de cena do Pexels
+    assert compostas == ["neutro", "neutro"]
+    assert not (tmp_path / "out" / "emocoes.txt").exists()
+
+
+def test_emocoes_reaproveitadas_no_resume(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    # Resume de fundo por IA + personagem: emocoes.txt existente é reaproveitado (não replaneja).
+    ger = _tipo_geracao(visuais={"fundo": "ia", "personagem": "sim"})
+    tipo = make_tipo(config_extra={"geracao": ger})
+    base = tmp_path / "out"
+    base.mkdir()
+    (base / "roteiro.txt").write_text("frase um\nfrase dois", encoding="utf-8")
+    (base / "prompts.txt").write_text("prompt a\nprompt b", encoding="utf-8")
+    (base / "emocoes.txt").write_text("feliz\nserio", encoding="utf-8")
+    _instalar_provedores(monkeypatch, visuais=_FakeVisuaisFluxPNG())
+
+    replanejou = []
+    monkeypatch.setattr(
+        pipeline.generate_scene, "planejar_emocoes", lambda *a, **k: replanejou.append(1) or [],
+    )
+    orig = pipeline.sobrepor_personagem
+    compostas = []
+    monkeypatch.setattr(
+        pipeline, "sobrepor_personagem",
+        lambda cena, emo, cfg, ad: compostas.append(emo) or orig(cena, emo, cfg, ad),
+    )
+
+    gerar_video("tema", tipo, base)
+
+    assert replanejou == []  # reaproveitou emocoes.txt
+    assert compostas == ["feliz", "serio"]
+
+
+def test_camada_pexels_sem_personagem(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    # Combo novo: foto do Pexels de fundo, sem personagem.
+    ger = _tipo_geracao(visuais={"fundo": "pexels", "personagem": "nao"})
+    tipo = make_tipo(config_extra={"geracao": ger})  # make_tipo é modo personagem, mas as camadas mandam
+    pedidos = _instalar_provedores(monkeypatch, visuais=_FakeVisuaisPexels())
+
+    compostas = []
+    monkeypatch.setattr(pipeline, "sobrepor_personagem", lambda *a: compostas.append(1))
+
+    gerar_video("tema", tipo, tmp_path / "out")
+
+    assert (pipeline.provedores.PAPEL_VISUAIS, "pexels") in pedidos  # fundo Pexels
+    assert compostas == []  # camada de personagem desligada
+    assert (tmp_path / "out" / "cenas.txt").exists()
 
 
 def test_cancelamento_aborta_antes_de_gastar(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
@@ -310,3 +423,41 @@ def test_narracao_cai_para_voz_secundaria(tmp_path, sistema_temp, make_tipo, amb
 
     caminho = gerar_video("tema", tipo, tmp_path / "out")
     assert caminho == tmp_path / "out" / "video_final.mp4"
+
+
+def test_visual_retenta_e_tem_sucesso(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    """Erro transitório numa cena: o motor retenta no mesmo provedor e obtém sucesso
+    (sem cair para placeholder) — prova o retry dentro do estágio, não só o failover."""
+
+    class _VisualInstavel(_FakeVisuaisFlux):
+        chamadas = 0
+
+        def renderizar(self, indice, dado, config, assets_dir, variacao=None, ledger=None):
+            type(self).chamadas += 1
+            if type(self).chamadas == 1:
+                raise TimeoutError("soluço transitório")
+            return super().renderizar(indice, dado, config, assets_dir, variacao=variacao, ledger=ledger)
+
+    tipo = make_tipo(config_extra={"imagens": {"modo": "ia"}})
+    led = pipeline.Ledger()
+    _instalar_provedores(monkeypatch, visuais=_VisualInstavel())
+
+    gerar_video("tema", tipo, tmp_path / "out", ledger=led)
+
+    assert led.provedores()["visuais"] == "flux"  # retentou e usou o provedor real
+    assert _VisualInstavel.chamadas >= 2
+
+
+def test_falha_parcial_falhar_derruba_o_run(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    """Com falha_parcial='falhar', um erro permanente numa cena derruba o run
+    inteiro em vez de degradar para placeholder."""
+
+    class _VisualPermanente(_FakeVisuaisFlux):
+        def renderizar(self, *a, **k):
+            raise ValueError("entrada inválida")  # classificado como permanente
+
+    tipo = make_tipo(config_extra={"imagens": {"modo": "ia"}, "operacao": {"falha_parcial": "falhar"}})
+    _instalar_provedores(monkeypatch, visuais=_VisualPermanente())
+
+    with pytest.raises(pipeline.resiliencia.ResilienciaEsgotada):
+        gerar_video("tema", tipo, tmp_path / "out", ledger=pipeline.Ledger())

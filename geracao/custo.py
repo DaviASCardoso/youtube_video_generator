@@ -15,8 +15,10 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from config import caminhos
+
 BASE = Path(__file__).parent
-_CUSTO_DIARIO_PATH = BASE.parent / "execucoes" / "custo_diario.json"  # dentro de execucoes/ (gitignored)
+_CUSTO_DIARIO_PATH = caminhos.raiz("execucoes") / "custo_diario.json"  # dentro de execucoes/ (gitignored)
 
 # Estimativas de custo (USD).
 CUSTO_GROQ_CHAMADA = 0.0005     # uma chamada de roteiro/plano (Groq llama-3.3-70b)

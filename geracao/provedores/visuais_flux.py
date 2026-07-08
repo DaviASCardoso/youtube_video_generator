@@ -1,8 +1,11 @@
-"""Provedor de visuais: FLUX.2-dev (Together), modo "ia".
+"""Provedor de visuais: FLUX.2-dev (Together) — **camada de fundo** por IA.
 
 `planejar` faz a segunda chamada Groq (frases → prompts de imagem) e reporta o
 custo dessa chamada; `renderizar` chama o FLUX por prompt (aplicando a variação de
-estilo ao texto do prompt) e reporta o custo da imagem.
+estilo ao texto do prompt) e reporta o custo da imagem. Produz só o **fundo**: a
+camada de personagem (com emoção por cena, planejada à parte) é composta pelo
+pipeline sobre este fundo — por isso o `dado` da cena pode chegar como o prompt puro
+ou como um dict `{"prompt", "emocao"}` quando o personagem está ligado.
 """
 
 from pathlib import Path
@@ -32,7 +35,7 @@ class VisuaisFlux:
         return list(prompts)  # 1:1 com as frases
 
     def renderizar(self, indice, dado, config, assets_dir, variacao=None, ledger=None):
-        prompt = dado
+        prompt = dado["prompt"] if isinstance(dado, dict) else dado
         if variacao is not None:
             prompt = variacao.aplicar_ao_estilo(prompt)
 

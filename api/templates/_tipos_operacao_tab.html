@@ -1,0 +1,17 @@
+{% import "_form_schema.html" as fs %}
+{% if sucesso %}
+<div class="aviso sucesso">Configuração de operação salva com sucesso.</div>
+{% endif %}
+{% if erro %}
+<div class="aviso erro">{{ erro }}</div>
+{% endif %}
+
+<p><small>
+  Operações agenda e orquestra os pilares e responde a falhas por um <strong>motor
+  classificado</strong> (transitório/permanente/auth/quota/recurso). Os defaults
+  reproduzem o comportamento de sempre — mexa com cuidado. Os <em>limites</em> (orçamento,
+  cota, sample floor) moram nos pilares donos; aqui você ajusta a <strong>resposta a
+  falhas</strong> e liga/desliga os jobs por pilar.
+</small></p>
+
+{{ fs.render_form(campos_operacao, action="/tipos/" ~ tipo.id ~ "/operacao", submit="Salvar operação", target="#operacao-tab") }}

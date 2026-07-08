@@ -14,9 +14,11 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from conformidade.configuracao import CONFORMIDADE_PADRAO
 from descoberta.configuracao import DESCOBERTA_PADRAO
 from feedback.configuracao import FEEDBACK_PADRAO
 from geracao.configuracao import GERACAO_PADRAO
+from operacoes.configuracao import OPERACAO_PADRAO
 from publicacao.configuracao import PUBLICACAO_PADRAO
 
 
@@ -75,6 +77,21 @@ def limpar_env(monkeypatch):
         monkeypatch.delenv(chave, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def circuito_isolado(tmp_path, monkeypatch):
+    """Aponta o store de circuito do motor para um arquivo temporário.
+
+    O singleton `operacoes.circuitos.circuitos` grava em execucoes/circuitos.json;
+    sem isso, um teste que exercita falha (retry/failover) escreveria no disco real.
+    """
+    import operacoes.circuitos as circ_mod
+    import operacoes.resiliencia as resil_mod
+
+    store = circ_mod.RegistroCircuitos(tmp_path / "circuitos.json")
+    monkeypatch.setattr(resil_mod, "circuitos", store)
+    return store
+
+
 def _png_minimo(caminho: Path, cor=(0, 0, 0, 255), tamanho=(20, 40)) -> Path:
     """Escreve um PNG RGBA minúsculo (para testes do compositor)."""
     caminho.parent.mkdir(parents=True, exist_ok=True)
@@ -118,17 +135,34 @@ _CONFIG_TIPO_PADRAO = {
     "geracao": GERACAO_PADRAO,
     "publicacao": PUBLICACAO_PADRAO,
     "feedback": FEEDBACK_PADRAO,
+    "operacao": OPERACAO_PADRAO,
+    "conformidade": CONFORMIDADE_PADRAO,
 }
+
+
+def _caminhos_temp(tmp_path):
+    """Bloco `caminhos` apontando as raízes de armazenamento para tmp_path.
+
+    Ambos `tipos_dir` e `sistema_temp` usam o mesmo tmp_path por teste, então a raiz
+    de tipos coincide qualquer que seja a ordem de setup dos fixtures."""
+    return {
+        "execucoes": str(tmp_path / "execucoes"),
+        "tendencias": str(tmp_path / "tendencias"),
+        "tipos": str(tmp_path / "tipos"),
+    }
 
 
 @pytest.fixture
 def tipos_dir(tmp_path, monkeypatch):
-    """Redireciona config.tipos._TIPOS_DIR para uma pasta temporária."""
-    import config.tipos as tipos_mod
+    """Aponta a raiz de tipos — pela config de caminhos do sistema, não por um atalho
+    de constante — para uma pasta temporária, exercitando a indireção real."""
+    from config.sistema import sistema
 
     destino = tmp_path / "tipos"
     destino.mkdir()
-    monkeypatch.setattr(tipos_mod, "_TIPOS_DIR", destino)
+    atual = json.loads(json.dumps(sistema.get_all()))
+    atual.setdefault("caminhos", {})["tipos"] = str(destino)
+    monkeypatch.setattr(sistema, "_config", atual)
     return destino
 
 
@@ -161,14 +195,18 @@ def make_tipo(tipos_dir):
 
 
 @pytest.fixture
-def sistema_temp(monkeypatch):
-    """Injeta valores conhecidos no singleton config.sistema.sistema, restaurando depois."""
+def sistema_temp(tmp_path, monkeypatch):
+    """Injeta valores conhecidos no singleton config.sistema.sistema, restaurando depois.
+
+    O bloco `caminhos` aponta para tmp_path (mesmo tmp do `tipos_dir`), então a
+    resolução via config.caminhos fica isolada do disco real."""
     from config.sistema import sistema
 
     original = sistema._config
     valores = {
         "execucao": {"max_simultaneo": 1},
         "saida": {"pasta_base": "output"},
+        "caminhos": _caminhos_temp(tmp_path),
         "video": {"fps": 24, "codec": "libx264", "audio_codec": "aac"},
     }
     sistema._config = json.loads(json.dumps(valores))

@@ -14,9 +14,26 @@ def test_montar_resume_o_run():
     assert sc["roteiro"] == "primeira\nsegunda"
     assert sc["n_cenas"] == 2
     assert sc["duracao_seg"] == 12.346
+    assert sc["hook"] == "primeira"  # abertura = primeira frase
+    assert sc["modo_visual"] is None  # não informado
     assert abs(sc["custo_total_usd"] - 0.0205) < 1e-9
     assert sc["provedores"]["visuais"] == "flux"
     assert "gerado_em" in sc
+
+
+def test_montar_grava_modo_visual_e_hook():
+    led = Ledger()
+    frases = [(1, "  O foco começa aqui.  "), (2, "segunda")]
+
+    sc = sidecar.montar("t", frases, duracao_seg=1.0, ledger=led, modo_visual="pexels")
+
+    assert sc["modo_visual"] == "pexels"
+    assert sc["hook"] == "O foco começa aqui."  # trim da primeira frase
+
+
+def test_montar_sem_frases_hook_none():
+    sc = sidecar.montar("t", [], duracao_seg=0.0, ledger=Ledger())
+    assert sc["hook"] is None
 
 
 def test_escrever_e_ler_roundtrip(tmp_path):

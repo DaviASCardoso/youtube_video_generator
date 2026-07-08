@@ -8,6 +8,10 @@
     <p style="margin:0.3rem 0"><em>{{ item.decisao.tema }}</em>
       <small>— fonte: {{ item.decisao.fonte }}, fit: {{ item.decisao.fit_score }}, {{ item.decisao.categoria }}</small></p>
     {% if item.decisao.justificativa %}<p style="margin:0.2rem 0"><small>{{ item.decisao.justificativa }}</small></p>{% endif %}
+    {% if item.conformidade %}
+    <p style="margin:0.3rem 0"><small>⚠️ <strong>Conformidade:</strong>
+      {% for f in item.conformidade %}{{ f }}{% if not loop.last %}; {% endif %}{% endfor %}</small></p>
+    {% endif %}
     <form hx-post="/aprovacoes/descoberta/{{ item.tipo.id }}/editar" hx-target="#aprovacoes" hx-swap="innerHTML"
           style="display:flex; gap:0.4rem; margin:0.4rem 0">
       <input type="text" name="tema" value="{{ item.decisao.tema }}" style="flex:1" required>
@@ -31,6 +35,10 @@
     <strong>{{ r.tipo_nome }}</strong> — <em>{{ r.tema }}</em>
     <p style="margin:0.3rem 0"><small>gerado em {{ r.finalizado_em[:16] if r.finalizado_em else '—' }} ·
       <a href="/execucoes/{{ r.id }}">ver run &amp; artefatos</a></small></p>
+    {% if r.conformidade %}
+    <p style="margin:0.3rem 0"><small>⚠️ <strong>Conformidade:</strong>
+      {% for f in r.conformidade %}{{ f }}{% if not loop.last %}; {% endif %}{% endfor %}</small></p>
+    {% endif %}
     <div style="display:flex; gap:0.5rem">
       <button hx-post="/aprovacoes/publicacao/{{ r.id }}/aprovar" hx-target="#aprovacoes" hx-swap="innerHTML"
               hx-confirm="Aprovar e publicar (idempotente)?">Aprovar &amp; publicar</button>

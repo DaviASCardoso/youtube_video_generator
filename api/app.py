@@ -11,8 +11,8 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from operacoes import scheduler as scheduler_mod
 from api.auth import RequerLoginMiddleware, auth_ativo
-from api.routers import aprovacoes, assets, auth, configuracoes, descoberta, execucoes, feedback, geracao, publicacao, temas, tipos
-from config.sistema import sistema
+from api.routers import aprovacoes, assets, auth, conformidade, configuracoes, descoberta, execucoes, feedback, geracao, operacao, publicacao, temas, tipos
+from config import caminhos
 
 BASE = Path(__file__).parent
 
@@ -34,6 +34,14 @@ def _ips_locais() -> list[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Cria a árvore de cada raiz de armazenamento (saída, execuções, tendências,
+    # tipos). Um mount (NAS) ausente/somente-leitura não derruba o painel — ele
+    # precisa subir para o ajuste poder ser corrigido em /configuracoes —, mas
+    # avisa de forma acionável (e o dashboard mostra o sinal).
+    problemas = caminhos.garantir_raizes()
+    if problemas:
+        print("\n" + caminhos.mensagem_problemas(problemas) + "\n")
+
     scheduler_mod.iniciar()
 
     porta = os.environ.get("PORT", "8000")
@@ -67,7 +75,7 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
-_pasta_saida = Path(sistema.get("saida.pasta_base"))
+_pasta_saida = caminhos.raiz("saida")
 _pasta_saida.mkdir(parents=True, exist_ok=True)
 app.mount("/saida", StaticFiles(directory=_pasta_saida), name="saida")
 
@@ -80,6 +88,8 @@ app.include_router(geracao.router)
 app.include_router(publicacao.router)
 app.include_router(feedback.router)
 app.include_router(feedback.painel)
+app.include_router(operacao.router)
+app.include_router(conformidade.router)
 app.include_router(temas.router)
 app.include_router(execucoes.router)
 app.include_router(aprovacoes.router)

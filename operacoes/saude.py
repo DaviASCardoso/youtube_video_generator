@@ -7,14 +7,21 @@ já existe; nada é computado ou forçado (isso é de Operações/pilares). Impo
 testes mockarem com facilidade.
 """
 
+import json
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from config.sistema import sistema
+from config import caminhos
 
 # Limiares default (só para marcar "atenção"; não forçam nada).
 DISCO_BAIXO_PCT = 10.0
+
+# Batida do scheduler: o job de saúde a grava; o dashboard a lê para detectar um
+# scheduler travado (running=True, mas sem disparar jobs). Estagnado após ~13h — pouco
+# mais de duas passadas do job de saúde (6h), então uma batida perdida não alarma.
+_HEARTBEAT_PATH = caminhos.raiz("execucoes") / "heartbeat.json"
+HEARTBEAT_LIMITE_SEG = 13 * 3600
 
 
 def scheduler_rodando() -> bool:
@@ -25,6 +32,29 @@ def scheduler_rodando() -> bool:
         return bool(sched_mod.scheduler.running)
     except Exception:
         return False
+
+
+def registrar_heartbeat(agora: datetime | None = None, caminho: Path | None = None) -> None:
+    """Grava a batida do scheduler (chamada pelo job periódico de saúde)."""
+    agora = agora or datetime.now(timezone.utc)
+    caminho = caminho or _HEARTBEAT_PATH
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.write_text(json.dumps({"quando": agora.isoformat()}), encoding="utf-8")
+
+
+def heartbeat(agora: datetime | None = None, caminho: Path | None = None) -> dict:
+    """Última batida do scheduler + se está estagnada (job de saúde não roda há muito).
+
+    Devolve `{quando, idade_seg, estagnado}`. Sem batida ainda (start recente), quando é
+    None e estagnado é False — não alarma antes da primeira passada."""
+    agora = agora or datetime.now(timezone.utc)
+    caminho = caminho or _HEARTBEAT_PATH
+    try:
+        quando = datetime.fromisoformat(json.loads(caminho.read_text(encoding="utf-8"))["quando"])
+    except (OSError, ValueError, KeyError, json.JSONDecodeError):
+        return {"quando": None, "idade_seg": None, "estagnado": False}
+    idade = (agora - quando).total_seconds()
+    return {"quando": quando.isoformat(), "idade_seg": round(idade, 1), "estagnado": idade > HEARTBEAT_LIMITE_SEG}
 
 
 def _pasta_existente(caminho: Path) -> Path:
@@ -39,10 +69,7 @@ def _pasta_existente(caminho: Path) -> Path:
 def disco(pasta: str | None = None, limite_pct: float = DISCO_BAIXO_PCT) -> dict:
     """Uso de disco da pasta de saída. Marca `baixo` quando o livre cai do limite."""
     if pasta is None:
-        try:
-            pasta = sistema.get("saida.pasta_base")
-        except KeyError:
-            pasta = "."
+        pasta = str(caminhos.raiz("saida"))
     alvo = _pasta_existente(Path(pasta))
     uso = shutil.disk_usage(alvo)
     livre_pct = (uso.free / uso.total * 100) if uso.total else 0.0
@@ -54,6 +81,14 @@ def disco(pasta: str | None = None, limite_pct: float = DISCO_BAIXO_PCT) -> dict
         "livre_pct": round(livre_pct, 1),
         "baixo": livre_pct < limite_pct,
     }
+
+
+def caminhos_saude() -> list[dict]:
+    """Estado de cada raiz de armazenamento configurada (existe? gravável?).
+
+    Uma raiz que aponta para um mount (NAS) ausente ou somente-leitura aparece como
+    `ok: False` — o dashboard mostra o sinal antes de um run falhar gravando nela."""
+    return caminhos.verificar_raizes()
 
 
 def _tipos(tipos=None):
@@ -144,7 +179,9 @@ def coletar(tipos=None) -> dict:
     return {
         "gerado_em": datetime.now(timezone.utc).isoformat(),
         "scheduler_rodando": scheduler_rodando(),
+        "heartbeat": heartbeat(),
         "disco": disco(),
+        "caminhos": caminhos_saude(),
         "credenciais": credenciais(tipos),
         "gasto_hoje": gasto_hoje(),
         "orcamentos": [
@@ -173,6 +210,15 @@ def verificar_e_alertar(tipos=None) -> list[str]:
             f"{d['caminho']}: {d['livre_gb']} GB livres ({d['livre_pct']}%).",
         )
         emitidas.append("disco_baixo")
+
+    for c in caminhos_saude():
+        if not c["ok"]:
+            notificacoes.emitir(
+                "disco_baixo",
+                f"Caminho de armazenamento indisponível — {c['nome']}",
+                f"{c['caminho']}: ausente ou não gravável (verifique o mount/permissões).",
+            )
+            emitidas.append("caminho_indisponivel")
 
     for c in credenciais(tipos):
         if c["status"] in ("expirando", "expirado", "ausente", "erro"):

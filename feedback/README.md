@@ -49,8 +49,8 @@ FINDINGS → roteador determinístico → ┌ numérico → ajuste limitado no c
   pontos de leitura de prompt (roteiro/visual da Geração, fit da Descoberta,
   metadados/thumbnail da Publicação). Bloco ausente ⇒ prompt idêntico ao de hoje.
 - **Config numérico:** os alvos `descoberta.evergreen_ratio`, `publicacao.timing.horario`,
-  `geracao.roteiro.duracao_alvo_seg` (+ set-value em `tts.voz`/`imagens.modo`/
-  `publicacao.thumbnail.ativo`) recebem ajuste limitado e reversível.
+  `geracao.roteiro.duracao_alvo_seg` (+ set-value em `tts.voz`/`geracao.visuais.fundo`
+  — a camada de fundo, IA/Pexels — /`publicacao.thumbnail.ativo`) recebem ajuste limitado e reversível.
 - **Operações:** `scheduler._job_feedback` (diário) chama `ingestao.ingerir` +
   `feedback.processar` por tipo ativo.
 - **Controle:** aba **Feedback** (config schema-driven) no editar-tipo e a página

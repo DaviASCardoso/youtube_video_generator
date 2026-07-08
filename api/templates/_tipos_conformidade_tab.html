@@ -1,0 +1,58 @@
+{% import "_form_schema.html" as fs %}
+{% if sucesso %}
+<div class="aviso sucesso">Configuração de conformidade salva com sucesso.</div>
+{% endif %}
+{% if erro %}
+<div class="aviso erro">{{ erro }}</div>
+{% endif %}
+
+<p><small>
+  A Conformidade é a <strong>consciência</strong> do canal: ela não produz nada —
+  <strong>veta</strong> e <strong>marca</strong>. Checagens objetivas (disclosure,
+  licenciamento) <strong>bloqueiam</strong>; as subjetivas (autenticidade, factual)
+  <strong>avisam</strong> no gate de revisão; a brand safety veta o inequívoco e sinaliza
+  o limítrofe. Com o pilar desligado, nada é checado — o comportamento é o de hoje.
+</small></p>
+
+{{ fs.render_form(campos_conformidade, action="/tipos/" ~ tipo.id ~ "/conformidade", submit="Salvar conformidade", target="#conformidade-tab") }}
+
+<hr style="margin:1.5rem 0">
+
+<h3>Conjunto de regras <small><code>v{{ regras_versao }}</code></small></h3>
+<p><small>
+  O <em>conteúdo</em> das regras — listas de brand safety, regra de disclosure e mapa de
+  licenças — mora aqui, versionado. A plataforma muda de fora: apertar o canal a uma
+  política nova é <strong>uma edição</strong>, não uma caçada. Publicar sobe a versão e
+  registra a nota no changelog. As checagens sempre consultam a versão vigente.
+</small></p>
+
+{% if sucesso_regras %}
+<div class="aviso sucesso">Regras publicadas — nova versão v{{ regras_versao }}.</div>
+{% endif %}
+{% if erro_regras %}
+<div class="aviso erro">{{ erro_regras }}</div>
+{% endif %}
+
+<form hx-post="/tipos/{{ tipo.id }}/conformidade/regras" hx-target="#conformidade-tab" hx-swap="innerHTML">
+  <label>
+    <span class="rotulo">Regras (JSON)</span>
+    <textarea name="regras" rows="18" spellcheck="false"
+              style="font-family:monospace;white-space:pre">{{ regras_json }}</textarea>
+  </label>
+  <label>
+    <span class="rotulo">Nota da mudança</span>
+    <input type="text" name="nota" placeholder="ex.: adiciona termo à lista de bloqueio">
+  </label>
+  <button type="submit" class="secundario">Publicar nova versão</button>
+</form>
+
+{% if regras_changelog %}
+<details style="margin-top:1rem">
+  <summary>Changelog ({{ regras_changelog | length }})</summary>
+  <ul>
+    {% for c in regras_changelog %}
+    <li><code>v{{ c.versao }}</code> — {{ c.quando }}{% if c.nota %} — {{ c.nota }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}

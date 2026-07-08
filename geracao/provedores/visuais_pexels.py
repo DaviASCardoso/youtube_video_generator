@@ -1,16 +1,18 @@
-"""Provedor de visuais: foto do Pexels + personagem (modo "personagem").
+"""Provedor de visuais: **camada de fundo** por foto do Pexels.
 
-`planejar` valida o personagem (fail-fast antes de gastar), faz a chamada Groq de
-cena (frase → emoção + termo de busca) e já resolve o índice de fundo por termo
-repetido (para variar a foto quando a mesma busca aparece de novo). `renderizar`
-baixa a foto no Pexels e compõe o quadro com o PNG da emoção; se o Pexels falhar,
-o compositor cai num gradiente de placeholder — o run não quebra.
+`planejar` faz a chamada Groq de cena (frase → emoção + termo de busca) e já resolve
+o índice de fundo por termo repetido (para variar a foto quando a mesma busca aparece
+de novo). A emoção fica no dado da cena para a camada de personagem (aplicada pelo
+pipeline) usá-la — o provedor em si só produz o **fundo**. `renderizar` baixa a foto no
+Pexels e recorta para o canvas; se o Pexels falhar, cai num gradiente de placeholder —
+o run não quebra. A composição do personagem é uma camada separada, ligada/desligada
+independente da fonte do fundo.
 """
 
 from pathlib import Path
 
 from geracao import pexels
-from geracao.compositor import compor_cena, validar_personagens
+from geracao.compositor import compor_fundo
 from geracao.custo import CUSTO_GROQ_CHAMADA, CUSTO_PEXELS, CUSTO_PLACEHOLDER
 from geracao.generate_scene import _normalizar
 from geracao.generate_script import _chamar_api, _parsear_prompts
@@ -28,8 +30,6 @@ def _orientacao(config) -> str:
 @registrar(PAPEL_VISUAIS, "pexels")
 class VisuaisPexels:
     def planejar(self, frases, config, assets_dir, variacao=None, ledger=None):
-        validar_personagens(assets_dir)
-
         system = (
             (Path(assets_dir) / "system_prompt_cena.txt")
             .read_text(encoding="utf-8")
@@ -58,12 +58,10 @@ class VisuaisPexels:
         fundo_bytes = pexels.buscar_imagem(
             dado["busca"], orientacao=_orientacao(config), indice=dado.get("i_fundo", 0)
         )
-        quadro = compor_cena(
-            fundo_bytes, dado["emocao"], config, assets_dir, indice=indice
-        )
+        quadro = compor_fundo(fundo_bytes, config, indice=indice)
 
         if ledger is not None:
             provedor = "pexels" if fundo_bytes else "placeholder"
             custo = CUSTO_PEXELS if fundo_bytes else CUSTO_PLACEHOLDER
             ledger.registrar("visuais", provedor, custo, busca=dado["busca"])
-        return quadro  # PIL.Image
+        return quadro  # PIL.Image (só o fundo; o personagem é camada separada)

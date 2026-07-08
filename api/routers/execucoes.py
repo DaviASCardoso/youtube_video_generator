@@ -9,7 +9,7 @@ from api.templating import templates
 from operacoes import saude
 from operacoes import scheduler as scheduler_mod
 from config.tipos import carregar_tipo, listar_tipos
-from config.sistema import sistema
+from config import caminhos
 from operacoes.execucoes import historico, transmissor, ExecucaoEmAndamentoError
 
 router = APIRouter(prefix="/execucoes", tags=["execucoes"])
@@ -56,6 +56,21 @@ def cancelar(execucao_id: str):
     return RedirectResponse(url=f"/execucoes/{execucao_id}", status_code=303)
 
 
+@router.post("/{execucao_id}/reexecutar")
+def reexecutar(request: Request, execucao_id: str):
+    """Re-enfileira um run parado (dead-letter/adiado/erro) reaproveitando a pasta —
+    o checkpoint retoma de onde parou. Redireciona para o novo run."""
+    try:
+        nova = scheduler_mod.reexecutar_agora(execucao_id)
+    except (ValueError, KeyError, ExecucaoEmAndamentoError) as e:
+        return templates.TemplateResponse(
+            "execucoes_index.html",
+            {"request": request, **_contexto_index(erro=str(e))},
+            status_code=409,
+        )
+    return RedirectResponse(url=f"/execucoes/{nova['id']}", status_code=303)
+
+
 @router.post("", response_class=HTMLResponse)
 def disparar(request: Request, tipo_id: str = Form(...), tema: str = Form("")):
     tipo = carregar_tipo(tipo_id)
@@ -78,13 +93,25 @@ def _url_video(execucao: dict) -> str | None:
     if execucao["status"] != "concluido" or not execucao.get("output_path"):
         return None
 
-    pasta_base = Path(sistema.get("saida.pasta_base")).resolve()
+    pasta_base = caminhos.raiz("saida").resolve()
     caminho_video = Path(execucao["output_path"]).resolve()
     try:
         relativo = caminho_video.relative_to(pasta_base)
     except ValueError:
         return None
     return f"/saida/{relativo.as_posix()}"
+
+
+def _auditoria_conformidade(execucao: dict) -> list[dict]:
+    """Registros da trilha de auditoria da Conformidade ligados a este run (mais
+    recentes primeiro). Vazio quando o pilar nunca rodou para o tipo."""
+    from conformidade.auditoria import auditoria_de
+
+    try:
+        tipo = carregar_tipo(execucao["tipo_id"])
+    except Exception:  # noqa: BLE001 (tipo renomeado/excluído)
+        return []
+    return auditoria_de(tipo).de_execucao(execucao["id"])
 
 
 @router.get("/historico", response_class=HTMLResponse)
@@ -119,6 +146,7 @@ def pagina_detalhe(execucao_id: str, request: Request):
             "execucao": execucao,
             "log_inicial": log_inicial,
             "url_video": _url_video(execucao),
+            "auditoria_conformidade": _auditoria_conformidade(execucao),
         },
     )
 

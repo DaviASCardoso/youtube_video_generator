@@ -8,12 +8,14 @@ from apscheduler.jobstores.base import JobLookupError
 
 from config.tipos import TipoVideo, listar_tipos_ativos, carregar_tipo
 from config.sistema import sistema
-from operacoes import saude
+from operacoes import recuperacao, saude
 from descoberta import estado
 from descoberta.configuracao import mesclar_descoberta
 from descoberta.descoberta import decidir_tema
+from operacoes.configuracao import mesclar_operacao
 from operacoes.execucoes import (
     ExecucaoEmAndamentoError,
+    definir_reagendador,
     executar_com_captura,
     historico,
     pasta_da_execucao,
@@ -47,6 +49,12 @@ _DIAS_SEMANA = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 def _antecedencia(tipo: TipoVideo) -> int:
     cfg = mesclar_descoberta(tipo.config.get_all().get("descoberta"))
     return cfg["antecedencia_horas"]
+
+
+def _jobs_do_tipo(tipo: TipoVideo) -> dict:
+    """Interruptores de job por pilar (`operacao.jobs.*`) do tipo. Operações lê/enforça
+    o enablement; o valor mora no bloco `operacao` do tipo."""
+    return mesclar_operacao(tipo.config.get_all().get("operacao"))["jobs"]
 
 
 def _configurar_trigger(tipo: TipoVideo) -> CronTrigger:
@@ -145,9 +153,48 @@ def _job_publicar(execucao_id: str) -> None:
     publicar_execucao(execucao_id)
 
 
-def _job_saude() -> None:
-    """Check periódico de saúde: emite ntfy para disco baixo / credencial expirando."""
+def _reenfileirar_recuperado(tipo_id: str, tema: str, execucao: dict, output_path) -> None:
+    """Re-enfileira um run órfão (reusa o registro e a pasta) no executor dos jobs."""
+    scheduler.add_job(
+        _job_reservado,
+        trigger="date",
+        run_date=datetime.now(),
+        args=[tipo_id, tema, execucao, output_path],
+        id=f"recuperado-{execucao['id']}",
+        replace_existing=True,
+    )
+
+
+def _job_adiado(tipo_id: str, tema: str, output_path) -> None:
+    """Retoma um run que foi adiado (cota/orçamento) quando a janela chega. Cria um
+    novo registro e reusa a pasta antiga — o checkpoint pula os estágios já prontos."""
+    tipo = carregar_tipo(tipo_id)
     try:
+        execucao = historico.iniciar(tipo.id, tipo.nome, tema)
+    except ExecucaoEmAndamentoError:
+        print(f"[{tipo.nome}] Já há execução em andamento; run adiado não reenfileirado.")
+        return
+    executar_com_captura(tema, tipo, execucao=execucao, output_path=output_path)
+
+
+def reagendar_adiado(tipo: TipoVideo, tema: str, output_path, quando: datetime) -> None:
+    """Reprograma um run adiado para `quando` (a janela em que o recurso reseta),
+    reusando a mesma pasta. Injetado no `executar_com_captura` via `definir_reagendador`."""
+    scheduler.add_job(
+        _job_adiado,
+        trigger="date",
+        run_date=quando,
+        args=[tipo.id, tema, str(output_path)],
+        id=f"adiado-{tipo.id}-{int(quando.timestamp())}",
+        replace_existing=True,
+    )
+
+
+def _job_saude() -> None:
+    """Check periódico de saúde: grava a batida do scheduler e emite ntfy para disco
+    baixo / credencial expirando."""
+    try:
+        saude.registrar_heartbeat()  # prova de que o scheduler dispara jobs
         saude.verificar_e_alertar()
     except Exception as e:  # noqa: BLE001
         print(f"[saude] falha no check periódico: {e}")
@@ -160,6 +207,8 @@ def _job_feedback() -> None:
     from feedback import ingestao, feedback as orquestrador
 
     for tipo in listar_tipos_ativos():
+        if not _jobs_do_tipo(tipo).get("feedback", True):
+            continue  # job de feedback desligado para este tipo
         try:
             ingestao.ingerir(tipo)
             orquestrador.processar(tipo)
@@ -169,18 +218,24 @@ def _job_feedback() -> None:
 
 def registrar_job(tipo: TipoVideo) -> None:
     """Agenda (ou reagenda) os jobs de um tipo: a geração no horário configurado e,
-    se `antecedencia_horas` > 0, a descoberta esse tanto de horas antes."""
-    scheduler.add_job(
-        _job_agendado,
-        trigger=_configurar_trigger(tipo),
-        args=[tipo.id],
-        id=tipo.id,
-        replace_existing=True,
-    )
+    se `antecedencia_horas` > 0, a descoberta esse tanto de horas antes. Respeita os
+    interruptores `operacao.jobs.{geracao,descoberta}` — um job desligado é removido."""
+    jobs = _jobs_do_tipo(tipo)
+
+    if jobs.get("geracao", True):
+        scheduler.add_job(
+            _job_agendado,
+            trigger=_configurar_trigger(tipo),
+            args=[tipo.id],
+            id=tipo.id,
+            replace_existing=True,
+        )
+    else:
+        _remover(tipo.id)
 
     id_descoberta = f"{tipo.id}{_SUFIXO_DESCOBERTA}"
     horas = _antecedencia(tipo)
-    if horas > 0:
+    if horas > 0 and jobs.get("descoberta", True):
         scheduler.add_job(
             _job_descoberta,
             trigger=_trigger_descoberta(tipo, horas),
@@ -337,6 +392,8 @@ def atualizar_max_simultaneo(max_simultaneo: int) -> None:
 
 
 def iniciar() -> None:
+    definir_reagendador(reagendar_adiado)  # runs adiados voltam pela janela de reset
+    recuperacao.recuperar_execucoes(_reenfileirar_recuperado)  # retoma órfãos de um reboot
     for tipo in listar_tipos_ativos():
         registrar_job(tipo)
     scheduler.add_job(

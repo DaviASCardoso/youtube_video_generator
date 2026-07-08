@@ -44,6 +44,7 @@ PRIORIDADES = ("min", "low", "default", "high", "urgent")
 # as de rotina são silenciosas por padrão e são suprimidas no silêncio.
 CATEGORIAS_CRITICAS = (
     "run_falhou",
+    "job_dead_letter",
     "credencial",
     "cota_atingida",
     "disco_baixo",
@@ -61,6 +62,7 @@ NOTIFICACOES_PADRAO = {
     "categorias": {
         # críticas: ligadas em high (a spec pede notificar só o que precisa de atenção)
         "run_falhou": {"ativo": True, "prioridade": "high"},
+        "job_dead_letter": {"ativo": True, "prioridade": "high"},
         "credencial": {"ativo": True, "prioridade": "high"},
         "cota_atingida": {"ativo": True, "prioridade": "high"},
         "disco_baixo": {"ativo": True, "prioridade": "high"},
@@ -78,6 +80,7 @@ NOTIFICACOES_PADRAO = {
 
 _ROTULOS_CATEGORIA = {
     "run_falhou": "Run falhou (após retries)",
+    "job_dead_letter": "Run em dead-letter (resiliência esgotada)",
     "credencial": "Credencial expirando/expirada",
     "cota_atingida": "Cota de upload atingida",
     "disco_baixo": "Disco/NAS baixo",

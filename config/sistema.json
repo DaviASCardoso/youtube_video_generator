@@ -5,6 +5,11 @@
   "saida": {
     "pasta_base": "output"
   },
+  "caminhos": {
+    "execucoes": "execucoes",
+    "tendencias": "tendencias",
+    "tipos": "tipos"
+  },
   "video": {
     "fps": 24,
     "codec": "libx264",

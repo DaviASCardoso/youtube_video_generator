@@ -56,6 +56,32 @@ def test_scheduler_rodando(monkeypatch):
     assert saude.scheduler_rodando() is False
 
 
+def test_heartbeat_fresco(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    caminho = tmp_path / "hb.json"
+    agora = datetime(2026, 7, 7, 12, 0, tzinfo=timezone.utc)
+    saude.registrar_heartbeat(agora=agora, caminho=caminho)
+    hb = saude.heartbeat(agora=agora + timedelta(hours=1), caminho=caminho)
+    assert hb["idade_seg"] == 3600.0
+    assert hb["estagnado"] is False
+
+
+def test_heartbeat_estagnado(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    caminho = tmp_path / "hb.json"
+    agora = datetime(2026, 7, 7, 0, 0, tzinfo=timezone.utc)
+    saude.registrar_heartbeat(agora=agora, caminho=caminho)
+    hb = saude.heartbeat(agora=agora + timedelta(hours=14), caminho=caminho)
+    assert hb["estagnado"] is True
+
+
+def test_heartbeat_ausente_nao_alarma(tmp_path):
+    hb = saude.heartbeat(caminho=tmp_path / "inexistente.json")
+    assert hb == {"quando": None, "idade_seg": None, "estagnado": False}
+
+
 # --- custo / orçamento / cota -----------------------------------------------
 
 
@@ -167,5 +193,37 @@ def test_verificar_e_alertar_silencioso_quando_ok(monkeypatch):
     )
     monkeypatch.setattr(saude, "disco", lambda: {"baixo": False, "caminho": "/x", "livre_gb": 50.0, "livre_pct": 80.0})
     monkeypatch.setattr(saude, "credenciais", lambda tipos=None: [{"status": "valido", "tipo_nome": "T", "destino": "youtube", "detalhe": ""}])
+    monkeypatch.setattr(saude, "caminhos_saude", lambda: [{"nome": "saida", "caminho": "/x", "existe": True, "gravavel": True, "ok": True}])
     assert saude.verificar_e_alertar() == []
     assert emitidas == []
+
+
+def test_caminhos_saude_reporta_raizes(sistema_temp):
+    estados = saude.caminhos_saude()
+    nomes = {e["nome"] for e in estados}
+    assert nomes == {"saida", "execucoes", "tendencias", "tipos"}
+    assert all(e["ok"] for e in estados)  # sistema_temp aponta para tmp gravável
+
+
+def test_verificar_e_alertar_caminho_indisponivel(monkeypatch):
+    emitidas = []
+    monkeypatch.setattr(
+        notificacoes, "emitir",
+        lambda cat, titulo, msg, prioridade=None: emitidas.append(cat) or True,
+    )
+    monkeypatch.setattr(saude, "disco", lambda: {"baixo": False, "caminho": "/x", "livre_gb": 50.0, "livre_pct": 80.0})
+    monkeypatch.setattr(saude, "credenciais", lambda tipos=None: [])
+    monkeypatch.setattr(
+        saude, "caminhos_saude",
+        lambda: [{"nome": "tipos", "caminho": "/nas/tipos", "existe": False, "gravavel": False, "ok": False}],
+    )
+    cats = saude.verificar_e_alertar()
+    assert "caminho_indisponivel" in cats
+
+
+def test_coletar_inclui_caminhos(sistema_temp, monkeypatch):
+    monkeypatch.setattr(saude, "credenciais", lambda tipos=None: [])
+    monkeypatch.setattr(saude, "gasto_hoje", lambda: 0.0)
+    dados = saude.coletar(tipos=[])
+    assert "caminhos" in dados
+    assert {e["nome"] for e in dados["caminhos"]} == {"saida", "execucoes", "tendencias", "tipos"}

@@ -93,17 +93,19 @@ def test_duracao_move_fracionado(make_tipo):
 
 
 def test_set_troca_valor(make_tipo):
-    tipo = make_tipo("tipo_teste")  # imagens.modo = personagem
-    p = roteador.propor(_f("modo_visual", "ia"), tipo, CFG)
+    # modo_visual agora gira a camada de fundo (geracao.visuais.fundo), não o modo.
+    tipo = make_tipo("tipo_teste")  # geracao.visuais.fundo = "auto" (default)
+    p = roteador.propor(_f("modo_visual", "pexels"), tipo, CFG)
     assert p["tipo"] == "set"
-    assert p["alvo"] == "imagens.modo"
-    assert p["valor_novo"] == "ia"
-    assert p["valor_atual"] == "personagem"
+    assert p["alvo"] == "geracao.visuais.fundo"
+    assert p["valor_novo"] == "pexels"
+    assert p["valor_atual"] == "auto"
 
 
 def test_set_igual_ao_atual_sem_proposta(make_tipo):
-    tipo = make_tipo("tipo_teste")  # imagens.modo = personagem
-    assert roteador.propor(_f("modo_visual", "personagem"), tipo, CFG) is None
+    # fundo já em "ia" e o finding aponta "ia" ⇒ sem mudança.
+    tipo = make_tipo("tipo_teste", config_extra={"geracao": {"visuais": {"fundo": "ia"}}})
+    assert roteador.propor(_f("modo_visual", "ia"), tipo, CFG) is None
 
 
 def test_thumbnail_booleano(make_tipo):
