@@ -179,6 +179,16 @@ class HistoricoExecucoes:
             finalizado_em=datetime.now(timezone.utc).isoformat(),
         )
 
+    def marcar_conformidade_bloqueada(self, execucao_id: str, motivo: str) -> dict:
+        """Bloqueio objetivo da Conformidade (disclosure/licença): a publicação é barrada.
+        Terminal; o vídeo fica no disco. Corrija a causa (regras/config) e re-execute."""
+        return self._atualizar(
+            execucao_id,
+            status="bloqueado_conformidade",
+            finalizado_em=datetime.now(timezone.utc).isoformat(),
+            erro=motivo,
+        )
+
     def registrar_custos(self, execucao_id: str, ledger) -> dict:
         """Anota no registro o custo/provedor por etapa vindos do Ledger do run."""
         return self._atualizar(

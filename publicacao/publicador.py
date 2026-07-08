@@ -164,6 +164,27 @@ def _subir_aos_destinos(tipo, pasta_run, execucao_id, metadados, thumb_path, cfg
         print(f"    [{nome}] publicado: {res['url']}")
 
 
+def _avaliar_conformidade(tipo, pasta_run, cfg, execucao_id):
+    """Roda a Conformidade sobre a publicação (import tardio p/ evitar ciclo). Devolve o
+    `Parecer` (inerte/vazio quando o pilar está desligado)."""
+    from conformidade import conformidade as conformidade_mod
+
+    return conformidade_mod.avaliar_publicacao(tipo, pasta_run, cfg, execucao_id=execucao_id)
+
+
+def _barrar(tipo, execucao_id, parecer, historico) -> str:
+    """Barra a publicação por um bloqueio objetivo da Conformidade (nunca em silêncio)."""
+    motivo = "; ".join(parecer.motivos_bloqueio)
+    print(f"Conformidade BLOQUEOU a publicação: {motivo}")
+    historico.marcar_conformidade_bloqueada(execucao_id, motivo)
+    notificacoes.emitir(
+        "revisao_pendente",
+        f"Publicação bloqueada pela Conformidade — {tipo.nome}",
+        f"Motivo: {motivo}",
+    )
+    return "bloqueado_conformidade"
+
+
 def publicar(tipo, pasta_run, execucao_id, ledger=None) -> str:
     """Publica um run já gerado. Devolve o desfecho: "sem_destino", "aguardando_revisao"
     ou "publicado" (este último mesmo com destinos parcialmente degradados)."""
@@ -175,6 +196,22 @@ def publicar(tipo, pasta_run, execucao_id, ledger=None) -> str:
 
     metadados = metadados_mod.obter_metadados(pasta_run, tipo.config, tipo.assets_dir, ledger=ledger)
     thumb_path = thumbnail_mod.obter_thumbnail(pasta_run, tipo.config, tipo.assets_dir, ledger=ledger)
+
+    # Conformidade: decide o disclosure, bloqueia nas objetivas (disclosure/licença) e
+    # sinaliza nas subjetivas. Inerte quando o pilar está desligado.
+    parecer = _avaliar_conformidade(tipo, pasta_run, cfg, execucao_id)
+    if parecer.bloqueado:
+        return _barrar(tipo, execucao_id, parecer, historico)
+    if parecer.flags and cfg["revisao"] != "revisar":
+        # flags advisory num run auto → força a revisão humana para o humano ver os avisos
+        print(f"Conformidade sinalizou (advisory): {'; '.join(parecer.flags)} — indo para revisão.")
+        historico.marcar_aguardando_publicacao(execucao_id)
+        notificacoes.emitir(
+            "revisao_pendente",
+            f"Vídeo com avisos de conformidade — {tipo.nome}",
+            "Um vídeo tem avisos de conformidade e aguarda sua aprovação.",
+        )
+        return "aguardando_revisao"
 
     if cfg["revisao"] == "revisar":
         print("Publicação em modo revisão — metadados/thumbnail prontos, aguardando aprovação.")
@@ -202,6 +239,13 @@ def publicar_aprovado(execucao_id, ledger=None) -> str:
         raise ValueError("Execução sem pasta de run para publicar.")
 
     cfg = mesclar_publicacao(tipo.config.get_all().get("publicacao"))
+
+    # A aprovação humana pula o `publicar()` — reaplica o bloqueio objetivo aqui, para que
+    # um Aprovar & publicar não passe por cima de um disclosure/licença faltando.
+    parecer = _avaliar_conformidade(tipo, pasta, cfg, execucao_id)
+    if parecer.bloqueado:
+        return _barrar(tipo, execucao_id, parecer, historico)
+
     metadados = metadados_mod.obter_metadados(pasta, tipo.config, tipo.assets_dir, ledger=ledger)
     thumb_path = thumbnail_mod.obter_thumbnail(pasta, tipo.config, tipo.assets_dir, ledger=ledger)
 
