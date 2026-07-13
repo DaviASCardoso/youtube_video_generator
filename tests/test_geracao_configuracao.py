@@ -1,5 +1,6 @@
 from api import formulario
 from api.schemas import GeracaoConfig
+from geracao.compositor import POSICOES
 from geracao.configuracao import (
     ACOES_ORCAMENTO,
     CAMADAS_PERSONAGEM,
@@ -74,13 +75,22 @@ def test_default_usa_enums_validos():
 
 
 def test_defaults_preservam_comportamento():
-    # legendas/música/orçamento não disparam por padrão; checkpoint on
+    # legendas/música/ícones/orçamento não disparam por padrão; checkpoint on
     assert GERACAO_PADRAO["legendas"]["ativo"] is False
+    assert GERACAO_PADRAO["icones"]["ativo"] is False
     assert GERACAO_PADRAO["montagem"]["musica_fundo"]["ativo"] is False
     assert GERACAO_PADRAO["montagem"]["intro"] == ""
     assert GERACAO_PADRAO["checkpoint"]["reaproveitar"] is True
     # variação ligada baixa de propósito (escolha do usuário)
     assert GERACAO_PADRAO["variacao"]["aberturas"] == 0.3
+
+
+def test_icones_defaults_e_enum():
+    ic = GERACAO_PADRAO["icones"]
+    assert ic["ativo"] is False  # off por padrão => saída idêntica a hoje
+    assert ic["conjunto"] == "mdi"  # Material Design Icons (Apache-2.0)
+    assert ic["posicao"] in POSICOES  # reusa o enum de cantos da camada de personagem
+    assert 1 <= ic["tamanho_percentual"] <= 100
 
 
 def test_mesclar_none_devolve_default_completo():
