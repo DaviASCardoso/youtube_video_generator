@@ -26,13 +26,20 @@ def _hook(frases: list) -> str | None:
 
 
 def montar(
-    tema: str, frases: list, duracao_seg: float, ledger, modo_visual: str | None = None
+    tema: str,
+    frases: list,
+    duracao_seg: float,
+    ledger,
+    modo_visual: str | None = None,
+    icones: list | None = None,
 ) -> dict:
     """Constrói o dicionário do sidecar a partir do run (função pura).
 
     Args:
         modo_visual: A composição visual de fato usada no run (o que a atribuição do
             Feedback lê como dimensão `modo_visual`). None quando não informado.
+        icones: Conceito de ícone por cena (str ou None), quando a camada de ícones
+            está ligada — para o run ser inspecionável. None quando a camada está off.
     """
     return {
         "tema": tema,
@@ -40,6 +47,7 @@ def montar(
         "n_cenas": len(frases),
         "duracao_seg": round(float(duracao_seg), 3),
         "modo_visual": modo_visual,
+        "icones": icones,
         "hook": _hook(frases),
         "custo_total_usd": round(ledger.total(), 6),
         "custos": ledger.itens(),
