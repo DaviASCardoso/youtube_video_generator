@@ -9,6 +9,14 @@ def test_todos_provedores_licenciados_passa():
     assert r["sem_licenca"] == []
 
 
+def test_iconify_e_licenciado_por_padrao():
+    # ícones do Iconify (set padrão mdi = Apache-2.0, sem atribuição) são licenciados
+    sidecar = {"provedores": {"visuais": "flux", "icones": "iconify"}}
+    r = verificar_licenciamento(sidecar, REGRAS_PADRAO)
+    assert r["ok"] is True
+    assert r["sem_licenca"] == []
+
+
 def test_provedor_desconhecido_bloqueia():
     # 'musica' não está no mapa de licenças → sem licença → bloqueia
     sidecar = {"custos": [

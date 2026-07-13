@@ -47,6 +47,7 @@ REGRAS_PADRAO = {
         "google": True,      # narração TTS licenciada
         "groq": True,        # roteiro gerado (original)
         "placeholder": True, # gradiente local
+        "iconify": True,     # ícones do Iconify; set padrão mdi = Apache-2.0, sem atribuição
     },
 }
 
