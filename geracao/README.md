@@ -12,11 +12,11 @@ painel, na aba "Geração").
 
 ## Camadas visuais (compostas e independentes)
 
-O visual são **três camadas independentes** (substituem os dois modos empacotados;
-`imagens.modo` virou só a fonte de migração). Cada uma liga/desliga e configura sozinha
-no painel; os defaults (`"auto"`) reproduzem os dois presets de antes, migrando do
-legado `imagens.modo` (`ia` → fundo IA + personagem off; `personagem` → fundo Pexels
-+ personagem on). Qualquer combinação é possível.
+O visual são **quatro camadas independentes** (fundo, personagem, ícones e legenda;
+substituem os dois modos empacotados; `imagens.modo` virou só a fonte de migração). Cada
+uma liga/desliga e configura sozinha no painel; os defaults (`"auto"`/off) reproduzem os
+dois presets de antes, migrando do legado `imagens.modo` (`ia` → fundo IA + personagem off;
+`personagem` → fundo Pexels + personagem on). Qualquer combinação é possível.
 
 - **Fundo** (`geracao.visuais.fundo`: `auto`|`ia`|`pexels`) — a fonte do backdrop,
   independente do personagem. O provedor de visuais **segue a fonte do fundo**
@@ -27,6 +27,17 @@ legado `imagens.modo` (`ia` → fundo IA + personagem off; `personagem` → fund
   Pexels vem do próprio plano de cena (1 chamada); no fundo por IA é planejada em separado
   (`generate_scene.planejar_emocoes`, checkpoint `emocoes.txt`) — então um fundo por IA
   também tem expressão por cena, não um `neutro` fixo.
+- **Ícones** (`geracao.icones`, default **off**) — sobrepõe um ícone por cena, quando o
+  conceito da cena pede (um por cena; algumas cenas não têm nenhum). O **conceito** (um
+  substantivo em inglês, ou `null`) vem como um **terceiro fator** da mesma chamada de
+  cena que já decide emoção/busca (fundo Pexels; sem chamada extra); no fundo por IA é
+  planejado à parte (`generate_scene.planejar_icones`, checkpoint `icones.txt`). O ícone é
+  buscado no **Iconify** (`iconify.py` — público, **sem chave e sem conta**) dentro do set
+  configurado (default `mdi` = Material Design Icons, Apache-2.0, sem atribuição),
+  recolorido, rasterizado de SVG para PNG (cairosvg) e composto num canto
+  (posição/tamanho/margens/cor em `geracao.icones.*`). Cacheia por conceito+set e grava
+  `icons/icone_N.png` na pasta do run (checkpoint). Qualquer falha (sem match, rede,
+  rasterização) → a cena sai sem ícone.
 - **Legenda** (`geracao.legendas`) — burn-in opcional com fonte/cor/posição/contorno
   (as mesmas alavancas do texto da thumbnail).
 
@@ -49,7 +60,7 @@ Fonte da verdade da config e helpers do pipeline:
 - `gates.py` — validação estrutural entre estágios (roteiro/plano/narração/visuais).
 - `custo.py` — tabelas-estimativa, `Ledger`, gasto diário e `checar_orcamento()`.
 - `variacao.py` — variação deliberada de abertura/estrutura/estilo/música (0 = idêntico; semeável).
-- `sidecar.py` — escreve/lê o `sidecar.json` (handoff para a Publicação e o Feedback; grava `modo_visual`/`hook`).
+- `sidecar.py` — escreve/lê o `sidecar.json` (handoff para a Publicação e o Feedback; grava `modo_visual`/`hook`/`icones`).
 - `legendas.py` — SRT + burn-in opcional (default off) com estilo de fonte/contorno.
 - `pipeline.py` — `gerar_video()`: orquestra os estágios acima.
 
@@ -62,16 +73,21 @@ Provedores plugáveis por papel (`provedores/`):
 - *(seam documentado: ElevenLabs entra como `(narracao, "elevenlabs")` sem tocar no pipeline.)*
 
 Chamadas externas concretas embrulhadas pelos provedores:
-- `generate_script.py` / `generate_scene.py` — chamadas Groq (roteiro e plano).
+- `generate_script.py` / `generate_scene.py` — chamadas Groq (roteiro e plano). O plano de
+  cena decide **três fatores** por frase: `emocao`, `busca` e `icone` (`planejar_emocoes`/
+  `planejar_icones` aproveitam só um fator quando o fundo é por IA).
 - `generate_image.py` — imagem por IA (Together / FLUX.2).
 - `generate_voice.py` — narração (Google Cloud TTS).
-- `compositor.py` — `compor_fundo()` (camada de fundo) + `sobrepor_personagem()` (camada de personagem); `compor_cena()` empilha as duas (compat).
+- `compositor.py` — `compor_fundo()` (camada de fundo) + `sobrepor_personagem()` (camada de personagem) + `sobrepor_icone()` (camada de ícones); `compor_cena()` empilha fundo+personagem (compat).
 - `pexels.py` — busca de fotos de fundo no Pexels.
+- `iconify.py` — cliente Iconify (sem chave): busca no set, baixa o SVG, rasteriza (cairosvg) e cacheia por conceito+set.
 
 ## Artefatos escritos em `output/<tipo>/<timestamp>/` (gitignored)
 
-`roteiro.txt`, `prompts.txt` (fundo ia) ou `cenas.txt` (fundo pexels),
-`emocoes.txt` (só no fundo por IA + personagem), `images/imagem_N.png`,
-`audio/frase_N.mp3`, `legendas.srt` (se ligado), `video_final.mp4` e `sidecar.json`.
+`roteiro.txt`, `prompts.txt` (fundo ia) ou `cenas.txt` (fundo pexels; o ícone da cena
+vai no sufixo `<conceito>`), `emocoes.txt` (só no fundo por IA + personagem),
+`icones.txt` (só no fundo por IA + ícones), `images/imagem_N.png`, `icons/icone_N.png`
+(camada de ícones), `audio/frase_N.mp3`, `legendas.srt` (se ligado), `video_final.mp4`
+e `sidecar.json`.
 
 Runners: `python -m geracao.pipeline`, `python -m geracao.generate_script`, etc.
