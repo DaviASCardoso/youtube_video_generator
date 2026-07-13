@@ -143,6 +143,37 @@ def sobrepor_personagem(
     return cena
 
 
+def sobrepor_icone(
+    cena: Image.Image, caminho_icone: str | Path, cfg_icones: dict
+) -> Image.Image:
+    """A **camada de ícones**: cola um PNG de ícone (já rasterizado) sobre um quadro
+    pronto, no canto configurado — independente do fundo e do personagem.
+
+    Espelha `sobrepor_personagem`, mas é dirigida pelo bloco `geracao.icones` (não por
+    `imagens.personagem.*`) e o tamanho é referente à altura do quadro recebido, para
+    posicionar certo sobre qualquer fonte de fundo.
+
+    Args:
+        cena: Quadro já renderizado (modificado in-place e devolvido).
+        caminho_icone: PNG do ícone a sobrepor (transparente).
+        cfg_icones: O bloco `geracao.icones` (posicao/tamanho_percentual/margens).
+    """
+    largura, altura = cena.width, cena.height
+    posicao = cfg_icones.get("posicao", "superior_direito")
+    tamanho_pct = cfg_icones.get("tamanho_percentual", 12)
+    margem_lateral = cfg_icones.get("margem_lateral", 60)
+    margem_vertical = cfg_icones.get("margem_vertical", 60)
+
+    icone = Image.open(caminho_icone).convert("RGBA")
+    escala = (altura * tamanho_pct / 100) / icone.height
+    ic = icone.resize((round(icone.width * escala), round(icone.height * escala)))
+
+    x = margem_lateral if "esquerdo" in posicao else largura - margem_lateral - ic.width
+    y = margem_vertical if "superior" in posicao else altura - margem_vertical - ic.height
+    cena.paste(ic, (x, y), ic)
+    return cena
+
+
 def compor_cena(
     fundo_bytes: bytes | None,
     emocao: str,

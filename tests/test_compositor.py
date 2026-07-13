@@ -6,6 +6,7 @@ from geracao.compositor import (
     EMOCAO_PADRAO,
     caminho_personagem,
     compor_cena,
+    sobrepor_icone,
     validar_personagens,
     _cobrir,
 )
@@ -82,3 +83,44 @@ def test_cobrir_preenche_quadro_exato():
     origem = Image.new("RGB", (100, 100), (10, 20, 30))
     coberto = _cobrir(origem, 200, 400)
     assert coberto.size == (200, 400)
+
+
+# --- camada de ícones ------------------------------------------------------
+
+
+def _icone_png(tmp_path, cor=(255, 0, 0, 255), tamanho=(80, 80)):
+    caminho = tmp_path / "icone.png"
+    Image.new("RGBA", tamanho, cor).save(caminho, format="PNG")
+    return caminho
+
+
+def test_sobrepor_icone_preserva_tamanho_e_posiciona_no_canto(tmp_path):
+    cena = Image.new("RGB", (200, 400), (255, 255, 255))
+    icone = _icone_png(tmp_path)
+    cfg = {
+        "posicao": "superior_direito",
+        "tamanho_percentual": 25,  # ic.height = 400*0.25 = 100 (quadrado -> 100x100)
+        "margem_lateral": 10,
+        "margem_vertical": 20,
+    }
+    resultado = sobrepor_icone(cena, icone, cfg)
+
+    assert resultado.size == (200, 400)  # não redimensiona o quadro
+    # canto superior direito: x=200-10-100=90, y=20 -> centro ~ (140, 70) deve ser vermelho
+    assert resultado.getpixel((140, 70))[:3] == (255, 0, 0)
+    # canto oposto (inferior esquerdo) intacto = branco
+    assert resultado.getpixel((5, 395))[:3] == (255, 255, 255)
+
+
+def test_sobrepor_icone_inferior_esquerdo(tmp_path):
+    cena = Image.new("RGB", (200, 400), (255, 255, 255))
+    icone = _icone_png(tmp_path, cor=(0, 0, 255, 255))
+    cfg = {
+        "posicao": "inferior_esquerdo",
+        "tamanho_percentual": 25,
+        "margem_lateral": 10,
+        "margem_vertical": 20,
+    }
+    resultado = sobrepor_icone(cena, icone, cfg)
+    # x=10, y=400-20-100=280 -> centro ~ (60, 330) deve ser azul
+    assert resultado.getpixel((60, 330))[:3] == (0, 0, 255)
