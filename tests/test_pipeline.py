@@ -33,10 +33,24 @@ def test_ler_cenas_parseia_e_indexa_fundo(tmp_path):
     from geracao.pipeline import _ler_cenas
 
     caminho = tmp_path / "cenas.txt"
-    caminho.write_text("[feliz] (office)\n[serio] (office)\n", encoding="utf-8")
+    # linha com ícone (<clock>), linha sem (compat com cenas.txt antigo)
+    caminho.write_text("[feliz] (office) <clock>\n[serio] (office)\n", encoding="utf-8")
     dados = _ler_cenas(caminho)
-    assert dados[0] == {"emocao": "feliz", "busca": "office", "i_fundo": 0}
-    assert dados[1]["i_fundo"] == 1
+    assert dados[0] == {"emocao": "feliz", "busca": "office", "i_fundo": 0, "icone": "clock"}
+    assert dados[1]["i_fundo"] == 1 and dados[1]["icone"] is None
+
+
+def test_escrever_ler_cenas_roundtrip_com_icone(tmp_path):
+    from geracao.pipeline import _escrever_cenas, _ler_cenas
+
+    caminho = tmp_path / "cenas.txt"
+    _escrever_cenas(caminho, [
+        {"emocao": "feliz", "busca": "office", "icone": "money"},
+        {"emocao": "serio", "busca": "gym", "icone": None},
+    ])
+    dados = _ler_cenas(caminho)
+    assert dados[0]["icone"] == "money"
+    assert dados[1]["icone"] is None
 
 
 # --- fakes de provedor ----------------------------------------------------
@@ -299,6 +313,119 @@ def test_camada_pexels_sem_personagem(tmp_path, sistema_temp, make_tipo, ambient
     assert (pipeline.provedores.PAPEL_VISUAIS, "pexels") in pedidos  # fundo Pexels
     assert compostas == []  # camada de personagem desligada
     assert (tmp_path / "out" / "cenas.txt").exists()
+
+
+# --- camada de ícones -----------------------------------------------------
+
+
+class _FakePexelsComIcone(_FakeVisuaisPexels):
+    """Fundo Pexels que já traz um conceito de ícone por cena (a 1ª tem, a 2ª não)."""
+
+    def planejar(self, frases, config, assets_dir, variacao=None, ledger=None):
+        return [
+            {"emocao": "neutro", "busca": "x", "i_fundo": 0, "icone": ("clock" if i == 0 else None)}
+            for i, _ in enumerate(frases)
+        ]
+
+
+def _fake_iconify(monkeypatch):
+    """buscar_icone offline: grava um PNG minúsculo no destino e devolve o caminho.
+    Registra os conceitos pedidos."""
+    pedidos = []
+
+    def fake(conceito, prefixo="mdi", cor=None, destino=None, **k):
+        pedidos.append((conceito, prefixo))
+        Image.new("RGBA", (8, 8), (255, 0, 0, 255)).save(destino)
+        return destino
+
+    monkeypatch.setattr(pipeline.iconify, "buscar_icone", fake)
+    return pedidos
+
+
+def test_icones_off_por_padrao_nao_cria_icones(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    # Default: camada de ícones desligada => nenhum ícone, saída idêntica a hoje.
+    tipo = make_tipo()
+    _instalar_provedores(monkeypatch, visuais=_FakeVisuaisPexels())
+    chamou = _fake_iconify(monkeypatch)
+
+    gerar_video("tema", tipo, tmp_path / "out")
+
+    assert chamou == []  # nunca chamou o Iconify
+    assert list((tmp_path / "out" / "icons").glob("*.png")) == []
+    import json as _json
+    sc = _json.loads((tmp_path / "out" / "sidecar.json").read_text(encoding="utf-8"))
+    assert sc["icones"] is None
+
+
+def test_icones_pexels_usa_conceito_do_plano(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    ger = _tipo_geracao(icones={"ativo": True})
+    tipo = make_tipo(config_extra={"geracao": ger})  # modo personagem -> fundo pexels
+    _instalar_provedores(monkeypatch, visuais=_FakePexelsComIcone())
+    chamou = _fake_iconify(monkeypatch)
+
+    gerar_video("tema", tipo, tmp_path / "out")
+
+    # só a cena com conceito baixa/compõe um ícone; a de conceito None não
+    assert chamou == [("clock", "mdi")]
+    assert (tmp_path / "out" / "icons" / "icone_1.png").exists()
+    assert not (tmp_path / "out" / "icons" / "icone_2.png").exists()
+    import json as _json
+    sc = _json.loads((tmp_path / "out" / "sidecar.json").read_text(encoding="utf-8"))
+    assert sc["icones"] == ["clock", None]
+    assert sc["provedores"]["icones"] == "iconify"  # procedência p/ o licenciamento
+
+
+def test_icones_fundo_ia_planeja_a_parte(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    # Fundo por IA, sem personagem, mas com ícones: o conceito é planejado à parte.
+    ger = _tipo_geracao(visuais={"fundo": "ia", "personagem": "nao"}, icones={"ativo": True})
+    tipo = make_tipo(config_extra={"geracao": ger})
+    _instalar_provedores(monkeypatch, visuais=_FakeVisuaisFluxPNG())
+    chamou = _fake_iconify(monkeypatch)
+    monkeypatch.setattr(
+        pipeline.generate_scene, "planejar_icones",
+        lambda frases, cfg, ad, ledger=None: ["brain", None],
+    )
+
+    gerar_video("tema", tipo, tmp_path / "out")
+
+    assert chamou == [("brain", "mdi")]
+    assert (tmp_path / "out" / "icones.txt").read_text(encoding="utf-8").splitlines() == ["brain", "null"]
+    assert (tmp_path / "out" / "icons" / "icone_1.png").exists()
+    import json as _json
+    sc = _json.loads((tmp_path / "out" / "sidecar.json").read_text(encoding="utf-8"))
+    assert sc["icones"] == ["brain", None]
+
+
+def test_icone_falha_de_busca_degrada_sem_icone(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    ger = _tipo_geracao(icones={"ativo": True})
+    tipo = make_tipo(config_extra={"geracao": ger})
+    _instalar_provedores(monkeypatch, visuais=_FakePexelsComIcone())
+    # Iconify falha (None) -> cena sai sem ícone, run completa mesmo assim
+    monkeypatch.setattr(pipeline.iconify, "buscar_icone", lambda *a, **k: None)
+
+    caminho = gerar_video("tema", tipo, tmp_path / "out")
+
+    assert caminho == tmp_path / "out" / "video_final.mp4"
+    assert list((tmp_path / "out" / "icons").glob("*.png")) == []
+    import json as _json
+    sc = _json.loads((tmp_path / "out" / "sidecar.json").read_text(encoding="utf-8"))
+    assert sc["icones"] == ["clock", None]  # conceito planejado ainda é registrado
+    assert "icones" not in sc["provedores"]  # nada composto -> sem procedência iconify
+
+
+def test_icone_nao_refaz_se_ja_existe_na_run(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):
+    # Resume: icons/icone_1.png já no disco -> não chama o Iconify de novo.
+    ger = _tipo_geracao(icones={"ativo": True})
+    tipo = make_tipo(config_extra={"geracao": ger})
+    base = tmp_path / "out"
+    (base / "icons").mkdir(parents=True)
+    Image.new("RGBA", (8, 8), (0, 255, 0, 255)).save(base / "icons" / "icone_1.png")
+    _instalar_provedores(monkeypatch, visuais=_FakePexelsComIcone())
+    chamou = _fake_iconify(monkeypatch)
+
+    gerar_video("tema", tipo, base)
+
+    assert chamou == []  # reusou o PNG já baixado nesta run
 
 
 def test_cancelamento_aborta_antes_de_gastar(tmp_path, sistema_temp, make_tipo, ambiente, monkeypatch):

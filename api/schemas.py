@@ -368,6 +368,23 @@ class LegendasConfig(BaseModel):
         return v
 
 
+class IconesConfig(BaseModel):
+    ativo: bool
+    conjunto: str = Field(min_length=1)
+    posicao: str
+    tamanho_percentual: int = Field(ge=1, le=100)
+    margem_lateral: int = Field(ge=0)
+    margem_vertical: int = Field(ge=0)
+    cor: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+
+    @field_validator("posicao")
+    @classmethod
+    def _validar_posicao(cls, v):
+        if v not in POSICOES:
+            raise ValueError(f"posicao deve ser uma de: {', '.join(POSICOES)}")
+        return v
+
+
 class MusicaFundoConfig(BaseModel):
     ativo: bool
     arquivo: str = ""
@@ -409,6 +426,7 @@ class GeracaoConfig(BaseModel):
     visuais: VisuaisGeracaoConfig
     narracao: NarracaoGeracaoConfig
     legendas: LegendasConfig
+    icones: IconesConfig
     montagem: MontagemGeracaoConfig
     variacao: VariacaoConfig
     orcamento: OrcamentoConfig

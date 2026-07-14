@@ -118,9 +118,9 @@ def test_visuais_pexels_planejar_normaliza_e_indexa_fundo(make_tipo, monkeypatch
         "geracao.provedores.visuais_pexels._chamar_api",
         lambda s, u, c: json.dumps(
             [
-                {"emocao": "feliz", "busca": "office desk"},
+                {"emocao": "feliz", "busca": "office desk", "icone": "Money"},
                 {"emocao": "lixo", "busca": ""},          # normaliza p/ neutro + fallback
-                {"emocao": "serio", "busca": "office desk"},  # termo repetido -> i_fundo=1
+                {"emocao": "serio", "busca": "office desk", "icone": None},  # termo repetido -> i_fundo=1
             ]
         ),
     )
@@ -130,6 +130,9 @@ def test_visuais_pexels_planejar_normaliza_e_indexa_fundo(make_tipo, monkeypatch
     assert dados[0]["emocao"] == "feliz" and dados[0]["i_fundo"] == 0
     assert dados[1]["emocao"] == "neutro" and dados[1]["busca"]
     assert dados[2]["busca"] == "office desk" and dados[2]["i_fundo"] == 1
+    # o conceito de ícone rega junto a mesma chamada de cena (None quando ausente)
+    assert dados[0]["icone"] == "money"
+    assert dados[1]["icone"] is None and dados[2]["icone"] is None
 
 
 def test_visuais_pexels_renderizar_placeholder(make_tipo, monkeypatch):

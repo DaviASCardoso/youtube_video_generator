@@ -25,11 +25,12 @@ from PIL import Image
 
 from config.sistema import sistema
 from config.tipos import TipoVideo
-from geracao import gates, generate_scene, legendas, sidecar
+from geracao import gates, generate_scene, iconify, legendas, sidecar
 from geracao.checkpoint import deve_reaproveitar
 from geracao.compositor import (
     EMOCAO_PADRAO,
     _fundo_placeholder,
+    sobrepor_icone,
     sobrepor_personagem,
     validar_personagens,
 )
@@ -145,13 +146,19 @@ def _ler_prompts(caminho: Path) -> list[str]:
     return [l for l in caminho.read_text(encoding="utf-8").splitlines() if l.strip()]
 
 
-_RE_CENA = re.compile(r"^\[(?P<emocao>.*?)\]\s*\((?P<busca>.*)\)$")
+# O conceito de ícone (camada de ícones) fica num sufixo opcional `<icone>`, para o
+# checkpoint sobreviver a um resume sem perder o ícone e sem quebrar cenas.txt antigos.
+_RE_CENA = re.compile(r"^\[(?P<emocao>.*?)\]\s*\((?P<busca>.*?)\)(?:\s*<(?P<icone>.*?)>)?$")
 
 
 def _escrever_cenas(caminho: Path, dados: list) -> None:
-    caminho.write_text(
-        "\n".join(f"[{d['emocao']}] ({d['busca']})" for d in dados), encoding="utf-8"
-    )
+    linhas = []
+    for d in dados:
+        linha = f"[{d['emocao']}] ({d['busca']})"
+        if d.get("icone"):
+            linha += f" <{d['icone']}>"
+        linhas.append(linha)
+    caminho.write_text("\n".join(linhas), encoding="utf-8")
 
 
 def _ler_cenas(caminho: Path) -> list[dict]:
@@ -162,9 +169,10 @@ def _ler_cenas(caminho: Path) -> list[dict]:
         m = _RE_CENA.match(linha.strip())
         emocao = m.group("emocao") if m else "neutro"
         busca = (m.group("busca") if m else "abstract background") or "abstract background"
+        icone = (m.group("icone") or None) if m else None
         i_fundo = usados.get(busca, 0)
         usados[busca] = i_fundo + 1
-        dados.append({"emocao": emocao, "busca": busca, "i_fundo": i_fundo})
+        dados.append({"emocao": emocao, "busca": busca, "i_fundo": i_fundo, "icone": icone})
     return dados
 
 
@@ -234,6 +242,61 @@ def _estagio_plano_personagem(frases, dados, tipo, base, politica, rel, nome_vis
     return [{"prompt": p, "emocao": e} for p, e in zip(dados, emocoes)]
 
 
+# --- estágio: plano da camada de ícones (conceito por cena) ---------------
+
+
+def _mesclar_icone(dado, conceito: str | None):
+    """Anexa o conceito de ícone ao dado da cena, seja ele o prompt puro (fundo por IA
+    sem personagem) ou já um dict (fundo por IA com personagem)."""
+    if isinstance(dado, dict):
+        novo = dict(dado)
+        novo["icone"] = conceito
+        return novo
+    return {"prompt": dado, "icone": conceito}
+
+
+def _ler_icones(caminho: Path) -> list[str | None]:
+    linhas = caminho.read_text(encoding="utf-8").splitlines()
+    return [(l.strip() or None) if l.strip().lower() != "null" else None for l in linhas]
+
+
+def _escrever_icones(caminho: Path, conceitos: list) -> None:
+    caminho.write_text("\n".join(c or "null" for c in conceitos), encoding="utf-8")
+
+
+def _estagio_plano_icone(frases, dados, tipo, base, politica, rel, nome_visual, icone_ativo, led, reaproveitar):
+    """Planeja o conceito de ícone por cena, como camada independente do fundo e do
+    personagem.
+
+    Fundo Pexels já decide o ícone junto da emoção/busca (mesma chamada) — nada a fazer.
+    Fundo por IA: o conceito é planejado aqui, à parte (checkpoint próprio `icones.txt`),
+    e mesclado no `dado` de cada cena, para que um fundo por IA também mostre um ícone."""
+    if not icone_ativo or nome_visual == "pexels":
+        return dados  # desligado, ou o fundo Pexels já planejou o ícone
+
+    caminho = base / "icones.txt"
+    conceitos = None
+    if deve_reaproveitar(caminho, reaproveitar):
+        lidas = _ler_icones(caminho)
+        if len(lidas) == len(frases):  # só reaproveita se casa 1:1 com as cenas
+            print(f"Reaproveitando conceitos de ícone de {caminho}")
+            conceitos = lidas
+    if conceitos is None:
+        print("Planejando ícones das cenas...")
+        conceitos = resiliencia.executar(
+            lambda: generate_scene.planejar_icones(frases, tipo.config, tipo.assets_dir, ledger=led),
+            estagio="plano_icone",
+            provedor="groq",
+            politica=politica,
+            contexto={"tipo": tipo.id},
+            relatorio=rel,
+        )
+        _escrever_icones(caminho, conceitos)
+        print(f"Conceitos de ícone salvos em: {caminho}")
+
+    return [_mesclar_icone(d, c) for d, c in zip(dados, conceitos)]
+
+
 # --- estágio: visuais (render por cena) -----------------------------------
 
 
@@ -268,6 +331,33 @@ def _aplicar_personagem(imagem, dado, tipo) -> Image.Image:
     plano da cena quando existe (fundo Pexels); com fundo por IA, cai em neutro."""
     emocao = dado.get("emocao", EMOCAO_PADRAO) if isinstance(dado, dict) else EMOCAO_PADRAO
     return sobrepor_personagem(_para_pil(imagem), emocao, tipo.config, tipo.assets_dir)
+
+
+def _aplicar_icone(imagem, indice, dado, pasta_icones, cfg_ger, led):
+    """Camada de ícones: quando a cena tem um conceito, busca o ícone no Iconify (dentro
+    do set configurado), grava em `icons/icone_N.png` (checkpoint do run — nunca refaz o
+    que já está no disco desta run) e o compõe sobre o quadro. Sem conceito ou com falha
+    de busca/rasterização, o quadro sai sem ícone (degrada em vez de quebrar)."""
+    conceito = dado.get("icone") if isinstance(dado, dict) else None
+    if not conceito:
+        return imagem  # esta cena não pede ícone
+
+    cfg_icones = cfg_ger["icones"]
+    destino = pasta_icones / f"icone_{indice}.png"
+    if not destino.exists():  # nunca refaz um ícone já baixado nesta run
+        caminho = iconify.buscar_icone(
+            conceito,
+            prefixo=cfg_icones["conjunto"],
+            cor=cfg_icones["cor"],
+            destino=destino,
+        )
+        if caminho is None:
+            print(f"  cena {indice}: sem ícone para '{conceito}' — seguindo sem ícone")
+            return imagem
+
+    if led is not None:
+        led.registrar("icones", "iconify", 0.0, conceito=conceito, conjunto=cfg_icones["conjunto"])
+    return sobrepor_icone(_para_pil(imagem), destino, cfg_icones)
 
 
 def _render_resiliente(prov, indice, dado, tipo, cfg_ger, nome_visual, previsto, politica, rel, var, led, degradar):
@@ -308,7 +398,7 @@ def _render_resiliente(prov, indice, dado, tipo, cfg_ger, nome_visual, previsto,
         return _placeholder_failover()
 
 
-def _estagio_visuais(frases, prov, dados, tipo, pasta_imagens, cfg_ger, politica, rel, nome_visual, personagem_ativo, var, led, reaproveitar):
+def _estagio_visuais(frases, prov, dados, tipo, pasta_imagens, pasta_icones, cfg_ger, politica, rel, nome_visual, personagem_ativo, icone_ativo, var, led, reaproveitar):
     previsto = _CUSTO_PREVISTO_VISUAL.get(nome_visual, 0.0)
     print("\nGerando visuais...")
     for (indice, _), dado in zip(frases, dados):
@@ -327,9 +417,12 @@ def _estagio_visuais(frases, prov, dados, tipo, pasta_imagens, cfg_ger, politica
             prov, indice, dado, tipo, cfg_ger, nome_visual, previsto, politica, rel, var, led,
             degradar=(decisao == "degradar"),
         )
-        # Camada de personagem: independente da fonte do fundo (foto ou IA).
+        # Camadas sobrepostas, independentes da fonte do fundo (foto ou IA):
+        # personagem primeiro, ícone por cima de tudo.
         if personagem_ativo:
             imagem = _aplicar_personagem(imagem, dado, tipo)
+        if icone_ativo:
+            imagem = _aplicar_icone(imagem, indice, dado, pasta_icones, cfg_ger, led)
         _salvar_imagem(caminho, imagem)
         print(f"  cena {indice}/{len(frases)} pronta")
 
@@ -442,7 +535,8 @@ def gerar_video(
     base = Path(output_path)
     pasta_audio = base / "audio"
     pasta_imagens = base / "images"
-    for pasta in (base, pasta_audio, pasta_imagens):
+    pasta_icones = base / "icons"
+    for pasta in (base, pasta_audio, pasta_imagens, pasta_icones):
         pasta.mkdir(parents=True, exist_ok=True)
 
     cfg_ger = mesclar_geracao(tipo.config.get_all().get("geracao"))
@@ -457,6 +551,7 @@ def gerar_video(
     modo = _modo_imagens(tipo)
     fundo = resolver_fundo(cfg_ger["visuais"], modo)
     personagem_ativo = resolver_personagem(cfg_ger["visuais"], modo)
+    icone_ativo = cfg_ger["icones"]["ativo"]
 
     nome_visual = cfg_ger["visuais"]["provedor"]
     if nome_visual == "auto":
@@ -475,9 +570,12 @@ def gerar_video(
     dados = _estagio_plano_personagem(
         frases, dados, tipo, base, politica, rel, nome_visual, personagem_ativo, led, reaproveitar
     )
+    dados = _estagio_plano_icone(
+        frases, dados, tipo, base, politica, rel, nome_visual, icone_ativo, led, reaproveitar
+    )
     _checar_cancelamento(cancelado)
     _estagio_visuais(
-        frases, prov_visual, dados, tipo, pasta_imagens, cfg_ger, politica, rel, nome_visual, personagem_ativo, var, led, reaproveitar
+        frases, prov_visual, dados, tipo, pasta_imagens, pasta_icones, cfg_ger, politica, rel, nome_visual, personagem_ativo, icone_ativo, var, led, reaproveitar
     )
     _checar_cancelamento(cancelado)
     _estagio_narracao(frases, tipo, pasta_audio, cfg_ger, politica, rel, led, reaproveitar)
@@ -487,7 +585,14 @@ def gerar_video(
     # A dimensão modo_visual do Feedback agora é a fonte do fundo (camada de background):
     # a seleção do provedor e o aprendizado giram esse knob real, não o modo aposentado.
     modo_visual = "pexels" if nome_visual == "pexels" else "ia"
-    sidecar.escrever(base, sidecar.montar(tema, frases, duracao, led, modo_visual=modo_visual))
+    conceitos_icone = (
+        [d.get("icone") if isinstance(d, dict) else None for d in dados]
+        if icone_ativo else None
+    )
+    sidecar.escrever(
+        base,
+        sidecar.montar(tema, frases, duracao, led, modo_visual=modo_visual, icones=conceitos_icone),
+    )
     gasto_diario.registrar(led.total())
 
     print(f"\nVídeo gerado com sucesso: {caminho_video}")

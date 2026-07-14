@@ -15,6 +15,8 @@ hoje (exceto a variação, ligada baixa de propósito).
 
 import copy
 
+from geracao.compositor import POSICOES  # cantos (reusa o enum da camada de personagem)
+
 # --- Enums (importados pelo Controle para validar os formulários) -----------
 
 # Provedor de cada estágio. "auto" (visuais) segue a fonte do fundo (visuais.fundo):
@@ -73,6 +75,17 @@ GERACAO_PADRAO = {
         # Contorno igual ao texto da thumbnail (stroke). 0 = sem contorno (idêntico a hoje).
         "contorno_largura": 0,
         "contorno_cor": "#000000",
+    },
+    "icones": {
+        # Camada de ícones — independente e desligada por padrão (tipos existentes não
+        # mudam). Um ícone por cena, quando o conceito da cena pede (null = sem ícone).
+        "ativo": False,
+        "conjunto": "mdi",  # set do Iconify (mdi = Material Design Icons, Apache-2.0)
+        "posicao": "superior_direito",  # canto (reusa o enum da camada de personagem)
+        "tamanho_percentual": 12,  # tamanho do ícone como % da altura do canvas
+        "margem_lateral": 60,
+        "margem_vertical": 60,
+        "cor": "#FFFFFF",  # recolore o ícone (hex)
     },
     "montagem": {
         "musica_fundo": {"ativo": False, "arquivo": ""},  # arquivo em assets/musica/
@@ -139,6 +152,17 @@ UI_HINTS = {
     "legendas.posicao": {"rotulo": "Posição", "opcoes": POSICOES_LEGENDA},
     "legendas.contorno_largura": {"rotulo": "Contorno — largura (px, 0 = sem contorno)", "min": 0, "max": 20},
     "legendas.contorno_cor": {"rotulo": "Contorno — cor (hex, ex: #000000)"},
+    "icones": {
+        "rotulo": "Ícones (camada composta)",
+        "ajuda": "Sobrepõe um ícone por cena quando o conceito da cena pede — busca no Iconify (grátis, sem chave) dentro do set escolhido, recolore e compõe no canto. Desligado por padrão.",
+    },
+    "icones.ativo": {"rotulo": "Sobrepor ícone por cena"},
+    "icones.conjunto": {"rotulo": "Set do Iconify (ex.: mdi = Material Design Icons)"},
+    "icones.posicao": {"rotulo": "Posição", "opcoes": POSICOES},
+    "icones.tamanho_percentual": {"rotulo": "Tamanho (% da altura do canvas, 1–100)", "min": 1, "max": 100},
+    "icones.margem_lateral": {"rotulo": "Margem lateral (px)", "min": 0},
+    "icones.margem_vertical": {"rotulo": "Margem vertical (px)", "min": 0},
+    "icones.cor": {"rotulo": "Cor do ícone (hex, ex: #FFFFFF)"},
     "montagem": {"rotulo": "Montagem"},
     "montagem.musica_fundo": {"rotulo": "Música de fundo"},
     "montagem.musica_fundo.ativo": {"rotulo": "Música de fundo"},

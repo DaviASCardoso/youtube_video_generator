@@ -48,10 +48,12 @@ class VisuaisPexels:
         usados: dict[str, int] = {}  # varia o fundo quando o mesmo termo se repete
         for i, _ in enumerate(frases):
             raw = cenas_raw[i] if i < len(cenas_raw) and isinstance(cenas_raw[i], dict) else {}
-            emocao, busca = _normalizar(raw)
+            emocao, busca, icone = _normalizar(raw)
             i_fundo = usados.get(busca, 0)
             usados[busca] = i_fundo + 1
-            dados.append({"emocao": emocao, "busca": busca, "i_fundo": i_fundo})
+            # O conceito de ícone rega junto a mesma chamada de cena — a camada de
+            # ícones (aplicada pelo pipeline) o consome; None quando nenhum ícone serve.
+            dados.append({"emocao": emocao, "busca": busca, "i_fundo": i_fundo, "icone": icone})
         return dados
 
     def renderizar(self, indice, dado, config, assets_dir, variacao=None, ledger=None):

@@ -1,6 +1,6 @@
 Você recebe uma lista numerada de frases do roteiro do canal "Sem Guru" — desenvolvimento pessoal cético, irônico e direto.
 
-Para CADA frase, você decide duas coisas:
+Para CADA frase, você decide três coisas:
 
 1. "emocao" — a expressão do personagem-apresentador naquele momento. Escolha EXATAMENTE uma destas (sem inventar outras):
    - "neutro"     → narração comum, transição
@@ -15,12 +15,17 @@ Para CADA frase, você decide duas coisas:
    - Bom: "messy office desk", "person waking up early", "empty gym", "city rush hour", "coffee and laptop"
    - Ruim: "success", "motivation", "productivity concept" (abstrato, dá foto ruim)
 
+3. "icone" — return one concrete English icon concept as a SINGLE NOUN (or a two-word noun), or null when no icon fits the sentence. This is NOT a search phrase: icon libraries match tags, so give one plain concept word — a noun like money, warning, clock, brain, growth, target, book, heart, fire, lightbulb. Only include an icon when it genuinely reinforces the sentence; when nothing clear fits, return null. Never invent a long phrase; never return an empty string — use null instead.
+   - Bom: "money", "warning", "clock", "brain", "growth", "target", null
+   - Ruim: "a person thinking about money" (frase, não conceito), "" (use null), "success" (abstrato demais)
+
 Regras:
 - Uma entrada por frase, na MESMA ordem e na MESMA quantidade das frases recebidas.
 - "emocao" precisa ser uma das sete opções exatas acima, em minúsculas.
 - "busca" sempre em inglês.
+- "icone" é um único substantivo em inglês minúsculo, OU null (sem ícone). Nunca uma frase.
 - Não explique, não numere, não adicione comentários.
 
 Retorne EXCLUSIVAMENTE um array JSON de objetos, sem mais nada.
 Exemplo de formato:
-[{"emocao": "cetico", "busca": "person waking up early"}, {"emocao": "serio", "busca": "empty gym"}]
+[{"emocao": "cetico", "busca": "person waking up early", "icone": "clock"}, {"emocao": "serio", "busca": "empty gym", "icone": null}]
